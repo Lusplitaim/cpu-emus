@@ -1,56 +1,71 @@
-﻿using System.Runtime.InteropServices;
-
-namespace CPEMUS.Motorola.M68000
+﻿namespace CPEMUS.Motorola.M68000
 {
-    [StructLayout(LayoutKind.Explicit)]
-    internal class M68KRegs
+    public class M68KRegs
     {
+        private readonly int CMask = 0x01;
+        private readonly int VMask = 0x02;
+        private readonly int ZMask = 0x04;
+        private readonly int NMask = 0x08;
+        private readonly int XMask = 0x10;
+
         // Data registers.
-        [FieldOffset(0)]
-        public int D0;
-        [FieldOffset(4)]
-        public int D1;
-        [FieldOffset(8)]
-        public int D2;
-        [FieldOffset(12)]
-        public int D3;
-        [FieldOffset(16)]
-        public int D4;
-        [FieldOffset(20)]
-        public int D5;
-        [FieldOffset(24)]
-        public int D6;
-        [FieldOffset(28)]
-        public int D7;
+        public int[] D = new int[8];
 
         // Address registers.
-        [FieldOffset(32)]
-        public int A0;
-        [FieldOffset(36)]
-        public int A1;
-        [FieldOffset(40)]
-        public int A2;
-        [FieldOffset(44)]
-        public int A3;
-        [FieldOffset(48)]
-        public int A4;
-        [FieldOffset(52)]
-        public int A5;
-        [FieldOffset(56)]
-        public int A6;
+        public int[] A = new int[8];
 
         // User Stack Pointer.
-        [FieldOffset(60)]
-        public int A7;
-        [FieldOffset(60)]
-        public int USP;
+        public int USP
+        {
+            get => A[7];
+            set => A[7] = value;
+        }
 
         // Program Counter.
-        [FieldOffset(64)]
         public int PC;
 
         // Condition Code Register.
-        [FieldOffset(68)]
-        public byte CCR;
+        // Upper byte is read as all zeroes
+        // and is ignored when written.
+        public ushort CCR;
+        // Flags.
+        public bool X
+        {
+            get => IsFlagSet(XMask);
+            set => UpdateFlag(value, XMask);
+        }
+        public bool C
+        {
+            get => IsFlagSet(CMask);
+            set => UpdateFlag(value, CMask);
+        }
+        public bool Z
+        {
+            get => IsFlagSet(ZMask);
+            set => UpdateFlag(value, ZMask);
+        }
+        public bool V
+        {
+            get => IsFlagSet(VMask);
+            set => UpdateFlag(value, VMask);
+        }
+        public bool N
+        {
+            get => IsFlagSet(NMask);
+            set => UpdateFlag(value, NMask);
+        }
+
+        private bool IsFlagSet(int flagMask) => (CCR & XMask) == XMask;
+        private void UpdateFlag(bool set, int flagMask)
+        {
+            if (set)
+            {
+                CCR |= (ushort)flagMask;
+            }
+            else
+            {
+                CCR &= (ushort)~flagMask;
+            }
+        }
     }
 }
