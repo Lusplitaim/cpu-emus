@@ -22,13 +22,14 @@
         }
 
         // Program Counter.
-        public int PC;
+        public int PC { get; set; }
 
         // Condition Code Register.
         // Upper byte is read as all zeroes
         // and is ignored when written.
         public ushort CCR;
-        // Flags.
+
+        #region Flags.
         public bool X
         {
             get => IsFlagSet(XMask);
@@ -55,7 +56,7 @@
             set => UpdateFlag(value, NMask);
         }
 
-        private bool IsFlagSet(int flagMask) => (CCR & XMask) == XMask;
+        private bool IsFlagSet(int flagMask) => (CCR & flagMask) == flagMask;
         private void UpdateFlag(bool set, int flagMask)
         {
             if (set)
@@ -67,5 +68,6 @@
                 CCR &= (ushort)~flagMask;
             }
         }
+        #endregion
     }
 }
