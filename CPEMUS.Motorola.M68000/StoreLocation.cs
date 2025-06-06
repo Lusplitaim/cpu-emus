@@ -1,6 +1,6 @@
-﻿namespace CPEMUS.Motorola.M68000.EA
+﻿namespace CPEMUS.Motorola.M68000
 {
-    internal enum EALocation
+    internal enum StoreLocation
     {
         DataRegister = 0,
         AddressRegister = 1,

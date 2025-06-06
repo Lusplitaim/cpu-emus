@@ -1,269 +1,245 @@
 ﻿using CPEMUS.Motorola.M68000.Extensions;
+using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000.EA
 {
     internal class EAHelper
     {
-        private readonly int DEFAULT_INSTR_SIZE = 2;
+        private const int DEFAULT_OPCODE_SIZE = 2;
         private readonly M68KRegs _regs;
+        private readonly MemHelper _memHelper;
         private readonly byte[] _mem;
-        public EAHelper(M68KRegs regs, byte[] memory)
+        public EAHelper(M68KRegs regs, byte[] memory, MemHelper memHelper)
         {
             _regs = regs;
             _mem = memory;
+            _memHelper = memHelper;
         }
 
-        public EAProps Get(ushort opcode, OperandSize operandSize)
+        public EAProps Get(ushort opcode, OperandSize operandSize, int opcodeSize = DEFAULT_OPCODE_SIZE)
         {
-            int registerField = opcode & 0x7;
+            uint registerField = (uint)(opcode & 0x7);
             var mode = (EAMode)((opcode >> 3) & 0x7);
-            EAProps? result = null;
+            EAProps result;
+            bool getOperand = false;
             switch (mode)
             {
                 case EAMode.DataDirect: // EA = Dn.
-                    result = GetDnDirectVal(registerField);
+                    (getOperand, result) = GetDnDirectVal(registerField);
                     break;
                 case EAMode.AddressDirect: // EA = An.
-                    result = GetAnDirectVal(registerField);
+                    (getOperand, result) = GetAnDirectVal(registerField);
                     break;
                 case EAMode.AddressIndirect: // EA = [An].
-                    result = GetAnIndirectVal(registerField);
+                    (getOperand, result) = GetAnIndirectVal(registerField);
                     break;
                 case EAMode.PostincIndirect: // EA = [An++].
-                    result = GetAnIndirectPostincVal(registerField, operandSize);
+                    (getOperand, result) = GetAnIndirectPostincVal(registerField, operandSize);
                     break;
                 case EAMode.PredecIndirect: // EA = [--An].
-                    result = GetAnIndirectPredecVal(registerField, operandSize);
+                    (getOperand, result) = GetAnIndirectPredecVal(registerField, operandSize);
                     break;
                 case EAMode.BaseDisplacement: // EA = [An + displacement16].
-                    result = GetAnIndirectDisplaceVal(registerField);
+                    (getOperand, result) = GetAnIndirectDisplaceVal(registerField, opcodeSize);
                     break;
                 case EAMode.IndexedAddressing: // EA = [An + displacement8 + Xn.size * scale].
-                    result = GetIndexedAddressingVal(registerField);
+                    (getOperand, result) = GetIndexedAddressingVal(_regs.A[registerField], opcodeSize);
                     break;
                 case EAMode.PCAbsoluteImmediate:
-                    if (registerField == 0x2)
+                    if (registerField == 0x2) // EA = [PC + displacement16].
                     {
-                        result = GetPCDisplaceVal();
+                        (getOperand, result) = GetPCDisplaceVal(opcodeSize);
+                    }
+                    if (registerField == 0x3) // EA = [PC + displacement8 + Xn.size * scale].
+                    {
+                        (getOperand, result) = GetIndexedAddressingVal(_regs.PC, opcodeSize);
                     }
                     else if (registerField == 0x0)
                     {
-                        result = GetAbsoluteVal(true);
+                        (getOperand, result) = GetAbsoluteVal(true, opcodeSize);
                     }
                     else if (registerField == 0x1)
                     {
-                        result = GetAbsoluteVal(false);
+                        (getOperand, result) = GetAbsoluteVal(false, opcodeSize);
                     }
                     else if (registerField == 0x4)
                     {
-                        result = GetImmediateVal(operandSize);
+                        (getOperand, result) = GetImmediateVal(operandSize, opcodeSize);
+                    }
+                    else
+                    {
+                        throw new NotImplementedException("This addressing mode is unknown or not implemented.");
                     }
                     break;
+                default:
+                    throw new NotImplementedException("This addressing mode is unknown or not implemented.");
             }
 
-            if (!result.HasValue)
+            if (getOperand)
             {
-                throw new NotImplementedException("This addressing mode is not implemented.");
+                result.Operand = _memHelper.Read(result.Address, result.Location, operandSize);
             }
+            result.InstructionSize += opcodeSize;
 
-            return result.Value;
+            return result;
         }
 
-        private EAProps GetDnDirectVal(int idx)
+        private (bool getOperand, EAProps props) GetDnDirectVal(uint idx)
         {
-             return new()
+             return (true, new()
              {
-                 Operand = _regs.D[idx],
                  Address = idx,
-                 Location = EALocation.DataRegister,
-                 InstructionSize = DEFAULT_INSTR_SIZE,
-             };
+                 Location = StoreLocation.DataRegister,
+             });
         }
 
-        private EAProps GetAnDirectVal(int idx)
+        private (bool getOperand, EAProps props) GetAnDirectVal(uint idx)
         {
-            return new()
+            return (true, new()
             {
-                Operand = _regs.A[idx],
                 Address = idx,
-                Location = EALocation.AddressRegister,
-                InstructionSize = DEFAULT_INSTR_SIZE,
-            };
+                Location = StoreLocation.AddressRegister,
+            });
         }
 
-        private EAProps GetAnIndirectVal(int idx)
+        private (bool getOperand, EAProps props) GetAnIndirectVal(uint idx)
         {
-            return new()
+            return (true, new()
             {
-                Operand = _mem[_regs.A[idx]],
-                Address = idx,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE,
-            };
+                Address = _regs.A[idx],
+                Location = StoreLocation.Memory,
+            });
         }
 
-        private EAProps GetAnIndirectPostincVal(int idx, OperandSize operandSize)
+        private (bool getOperand, EAProps props) GetAnIndirectPostincVal(uint idx, OperandSize operandSize)
         {
-            int operand = _mem[_regs.A[idx]];
-            int address = _regs.A[idx];
+            uint address = _regs.A[idx];
             _regs.A[idx] += CalcAddressIncOrDecVal(idx, operandSize);
-            return new()
+            return (true, new()
             {
-                Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE,
-            };
+                Location = StoreLocation.Memory,
+            });
         }
 
-        private EAProps GetAnIndirectPredecVal(int idx, OperandSize operandSize)
+        private (bool getOperand, EAProps props) GetAnIndirectPredecVal(uint idx, OperandSize operandSize)
         {
             _regs.A[idx] -= CalcAddressIncOrDecVal(idx, operandSize);
-            int address = _regs.A[idx];
-            int operand = _mem[_regs.A[idx]];
-            return new()
+            uint address = _regs.A[idx];
+            return (true, new()
             {
-                Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE,
-            };
+                Location = StoreLocation.Memory,
+            });
         }
 
-        private int CalcAddressIncOrDecVal(int idx, OperandSize operandSize)
+        private uint CalcAddressIncOrDecVal(uint idx, OperandSize operandSize)
         {
             // If An is SP and operand is byte, increase/decrease
             // by two to keep the SP aligned to a word boundary.
             if (idx == 0x7 && operandSize == OperandSize.Byte)
             {
-                return (int)OperandSize.Word;
+                return (uint)OperandSize.Word;
             }
             else
             {
-                return (int)operandSize;
+                return (uint)operandSize;
             }
         }
 
-        private EAProps GetAnIndirectDisplaceVal(int idx)
+        private (bool getOperand, EAProps props) GetAnIndirectDisplaceVal(uint idx, int opcodeSize)
         {
             var an = _regs.A[idx];
-            int displacement = (short)_mem.ReadLong(_regs.PC);
-            int address = an + displacement;
-            int operand = _mem[address];
-            return new()
+            int displacement = (short)_mem.ReadWord((uint)(_regs.PC + opcodeSize));
+            uint address = (uint)(an + displacement);
+            return (true, new()
             {
-                Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE + 2,
-            };
+                Location = StoreLocation.Memory,
+                InstructionSize = 2,
+            });
         }
 
-        private EAProps GetIndexedAddressingVal(int idx)
+        private (bool getOperand, EAProps props) GetIndexedAddressingVal(uint an, int opcodeSize)
         {
-            var anVal = _regs.A[idx];
-
-            var extWord = (ushort)_mem.ReadLong(_regs.PC);
+            var extWord = (ushort)_mem.ReadWord((uint)(_regs.PC + opcodeSize));
             int displacement = (sbyte)extWord;
 
-            int indexRegisterIdx = (extWord & 0x7000) >> 12;
+            int indexRegisterIdx = (extWord >> 12) & 0x7;
             int indexRegister;
-            if ((IndexRegister)((extWord & 0x8000) >> 15) == IndexRegister.Address)
+            if ((IndexRegister)((extWord >> 15) & 0x1) == IndexRegister.Address)
             {
-                indexRegister = _regs.A[indexRegisterIdx];
+                indexRegister = (int)_regs.A[indexRegisterIdx];
             }
             else
             {
-                indexRegister = _regs.D[indexRegisterIdx];
+                indexRegister = (int)_regs.D[indexRegisterIdx];
             }
 
             if ((IndexSize)((extWord & 0x0800) >> 11) == IndexSize.SignExtendedWord)
             {
-                indexRegister = (short)indexRegister;
+                indexRegister = (short)(indexRegister & 0xFFFF);
             }
 
             int scale = (extWord & 0x0600) >> 9;
             
-            int address = anVal + displacement + indexRegister * (int)Math.Pow(2, scale);
-            int operand = _mem[address];
+            uint address = (uint)(an + displacement + indexRegister * (int)Math.Pow(2, scale));
 
-            return new()
+            return (true, new()
             {
-                Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE + 2,
-            };
+                Location = StoreLocation.Memory,
+                InstructionSize = 2,
+            });
         }
 
-        private EAProps GetPCDisplaceVal()
+        private (bool getOperand, EAProps props) GetPCDisplaceVal(int opcodeSize)
         {
             var pc = _regs.PC;
-            int displacement = (short)_mem.ReadLong(pc);
-            int address = pc + displacement;
-            int operand = _mem[address];
-            return new()
+            int displacement = (short)_mem.ReadWord((uint)(pc + opcodeSize));
+            uint address = (uint)(pc + displacement);
+            return (true, new()
             {
-                Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE + 2,
-            };
+                Location = StoreLocation.Memory,
+                InstructionSize = 2,
+            });
         }
 
-        private EAProps GetAbsoluteVal(bool word)
+        private (bool getOperand, EAProps props) GetAbsoluteVal(bool word, int opcodeSize)
         {
-            var pcVal = _regs.PC;
+            var pc = _regs.PC;
             int displacement;
             if (word)
             {
-                displacement = (short)_mem.ReadLong(pcVal);
+                displacement = (short)_mem.ReadWord((uint)(pc + opcodeSize));
             }
             else
             {
-                displacement = _mem.ReadLong(pcVal + 2);
+                displacement = (int)_mem.ReadLong((uint)(pc + opcodeSize));
             }
 
-            int address = displacement;
-            int operand = _mem[address];
-            return new()
+            uint address = (uint)displacement;
+            return (true, new()
             {
-                Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE + (word ? 2 : 4),
-            };
+                Location = StoreLocation.Memory,
+                InstructionSize = word ? 2 : 4,
+            });
         }
 
-        private EAProps GetImmediateVal(OperandSize operandSize)
+        private (bool getOperand, EAProps props) GetImmediateVal(OperandSize operandSize, int opcodeSize)
         {
-            var pc = _regs.PC;
-            int? result = null;
-            switch (operandSize)
-            {
-                case OperandSize.Byte:
-                    result = (byte)_mem.ReadLong(pc);
-                    break;
-                case OperandSize.Word:
-                    result = (ushort)_mem.ReadLong(pc);
-                    break;
-                case OperandSize.Long:
-                    result = _mem.ReadLong(pc);
-                    break;
-                default:
-                    throw new NotImplementedException("This type of immediate data is not handled.");
-            }
-
-            int address = pc;
-            int operand = result.Value;
-            int operationLength = operandSize == OperandSize.Byte ? 2 : (int)operandSize;
-            return new()
+            uint address = (uint)(_regs.PC + opcodeSize);
+            uint operand = _memHelper.ReadImmediate(address, operandSize);
+            int immediateDataLength = operandSize == OperandSize.Byte ? 2 : (int)operandSize;
+            return (false, new()
             {
                 Operand = operand,
                 Address = address,
-                Location = EALocation.Memory,
-                InstructionSize = DEFAULT_INSTR_SIZE + operationLength,
-            };
+                Location = StoreLocation.Memory,
+                InstructionSize = immediateDataLength,
+            });
         }
     }
 }

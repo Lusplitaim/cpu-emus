@@ -1,5 +1,6 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
 using CPEMUS.Motorola.M68000.Extensions;
+using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000
 {
@@ -19,88 +20,141 @@ namespace CPEMUS.Motorola.M68000
         private readonly int EXG_MASK = 0x0130;
         #endregion
 
-        private readonly int INSTRUCTION_DEFAULT_SIZE = 2;
+        private readonly int INSTR_DEFAULT_SIZE = 2;
 
         private readonly M68KRegs _regs;
         private readonly byte[] _mem;
         private readonly EAHelper _eaHelper;
+        private readonly MemHelper _memHelper;
         public M68K(byte[] mem)
         {
             _mem = mem;
             _regs = new();
-            _eaHelper = new(_regs, mem);
+            _memHelper = new(_regs, mem);
+            _eaHelper = new(_regs, mem, _memHelper);
         }
 
-        public void DecodeOpcode(ushort opcode)
+        public bool Run()
+        {
+            if (_regs.PC >= _mem.Length)
+            {
+                return false;
+            }
+
+            var opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
+            var instructionSize = DecodeOpcode(opcode);
+
+            _regs.PC += (uint)instructionSize;
+
+            return true;
+        }
+
+        public int DecodeOpcode(ushort opcode)
         {
             if ((opcode & 0xF000) == 0xC000)
             {
-                Decode0xC(opcode);
+                return Decode0xC(opcode);
             }
+
+            throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported");
         }
 
-        private void Decode0xC(ushort opcode)
+        private int Decode0xC(ushort opcode)
         {
             if ((opcode & MULU_MASK) == MULU_SFX)
             {
-                Mulu();
-                return;
+                return Mulu();
             }
             else if ((opcode & MULS_MASK) == MULS_SFX)
             {
-                Muls();
-                return;
+                return Muls();
             }
             else if ((opcode & ABCD_MASK) == ABCD_SFX)
             {
-                //Abcd();
+                throw new NotImplementedException();
             }
             else if ((opcode & EXG_MASK) == EXG_SFX)
             {
-                Exg();
+                return Exg();
             }
             else
             {
-                And(opcode);
+                return And(opcode);
             }
         }
 
-        private void Mulu()
+        private int Mulu()
         {
-
+            throw new NotImplementedException();
         }
 
-        private void Muls()
+        private int Muls()
         {
-
+            throw new NotImplementedException();
         }
 
-        private void Exg()
+        private int Exg()
         {
-
+            throw new NotImplementedException();
         }
 
         private int And(ushort opcode)
         {
-            int srcIdx = (opcode >> 9) & 0x7;
-            int src = _regs.D[srcIdx];
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
-            var eaResult = _eaHelper.Get(opcode);
-            int dest = eaResult.Operand;
+            uint srcIdx = (uint)((opcode >> 9) & 0x7);
+            uint src = _memHelper.Read(srcIdx, StoreLocation.DataRegister, operandSize);
 
-            int result = src & dest;
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+            uint dest = eaProps.Operand;
 
+            uint result = src & dest;
+
+            // Flags.
+            _regs.N = (result >> ((int)operandSize * 8 - 1)) == 1;
+            _regs.Z = result == 0;
+            _regs.V = false;
+            _regs.C = false;
+
+            // Storing.
             int storeDirection = (opcode >> 8) & 0x1;
             if ((StoreDirection)storeDirection == StoreDirection.Source)
             {
-                _regs.D[srcIdx] = result;
+                _memHelper.Write(result, srcIdx, StoreLocation.DataRegister, operandSize);
             }
             else
             {
-                _mem.WriteLong(eaResult.Address!.Value, result);
+                _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
             }
 
-            return eaResult.InstructionSize;
+            return eaProps.InstructionSize;
+        }
+
+        private int Andi(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var immediateDataSize = operandSize == OperandSize.Long
+                ? (int)OperandSize.Long
+                : (int)OperandSize.Word;
+            var pc = _regs.PC;
+
+            uint src = _memHelper.ReadImmediate((uint)(pc + INSTR_DEFAULT_SIZE), operandSize);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize, INSTR_DEFAULT_SIZE + immediateDataSize);
+            uint dest = eaProps.Operand;
+
+            uint result = src & dest;
+
+            // Flags.
+            _regs.N = (result >> ((int)operandSize * 8 - 1)) == 1;
+            _regs.Z = result == 0;
+            _regs.V = false;
+            _regs.C = false;
+
+            // Storing.
+            _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
+
+            return eaProps.InstructionSize;
         }
 
         private void Abcd(ref byte src, ref byte dest)

@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CPEMUS.Motorola.M68000", "C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CPEMUS.Console", "CPEMUS.Console\CPEMUS.Console.csproj", "{5C056F31-99BB-47B4-A268-20FD1CDCD96B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CPEMUS.Motorola.M68000.Tests", "CPEMUS.Motorola.M68000.Tests\CPEMUS.Motorola.M68000.Tests.csproj", "{7F03C9DF-2A67-4947-8AD6-927E128C23BB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{5C056F31-99BB-47B4-A268-20FD1CDCD96B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5C056F31-99BB-47B4-A268-20FD1CDCD96B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5C056F31-99BB-47B4-A268-20FD1CDCD96B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F03C9DF-2A67-4947-8AD6-927E128C23BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F03C9DF-2A67-4947-8AD6-927E128C23BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F03C9DF-2A67-4947-8AD6-927E128C23BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F03C9DF-2A67-4947-8AD6-927E128C23BB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -9,20 +9,20 @@
         private readonly int XMask = 0x10;
 
         // Data registers.
-        public int[] D = new int[8];
+        public uint[] D = new uint[8];
 
         // Address registers.
-        public int[] A = new int[8];
+        public uint[] A = new uint[8];
 
-        // User Stack Pointer.
-        public int USP
+        // User Stack Pouinter.
+        public uint USP
         {
             get => A[7];
             set => A[7] = value;
         }
 
         // Program Counter.
-        public int PC { get; set; }
+        public uint PC { get; set; }
 
         // Condition Code Register.
         // Upper byte is read as all zeroes

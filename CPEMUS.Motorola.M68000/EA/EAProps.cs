@@ -2,9 +2,9 @@
 {
     internal struct EAProps
     {
-        public int Operand;
-        public int? Address;
-        public EALocation Location;
+        public uint Operand;
+        public uint Address;
+        public StoreLocation Location;
         public int InstructionSize;
     }
 }
