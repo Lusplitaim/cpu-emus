@@ -1,6 +1,6 @@
 ﻿namespace CPEMUS.Motorola.M68000
 {
-    internal enum OperandSize
+    public enum OperandSize
     {
         Byte = 1,
         Word = 2,

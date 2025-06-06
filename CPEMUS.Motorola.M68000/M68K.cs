@@ -1,5 +1,6 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
 using CPEMUS.Motorola.M68000.Extensions;
+using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000
 {
@@ -24,11 +25,13 @@ namespace CPEMUS.Motorola.M68000
         private readonly M68KRegs _regs;
         private readonly byte[] _mem;
         private readonly EAHelper _eaHelper;
+        private readonly MemHelper _memHelper;
         public M68K(byte[] mem)
         {
             _mem = mem;
             _regs = new();
             _eaHelper = new(_regs, mem);
+            _memHelper = new(_regs, mem);
         }
 
         public void DecodeOpcode(ushort opcode)
@@ -85,22 +88,38 @@ namespace CPEMUS.Motorola.M68000
             int srcIdx = (opcode >> 9) & 0x7;
             int src = _regs.D[srcIdx];
 
-            var eaResult = _eaHelper.Get(opcode);
-            int dest = eaResult.Operand;
+            OperandSize operandSize;
+            switch ((opcode >> 6) & 0x3)
+            {
+                case 0:
+                    operandSize = OperandSize.Byte;
+                    break;
+                case 1:
+                    operandSize = OperandSize.Word;
+                    break;
+                case 2:
+                    operandSize = OperandSize.Long;
+                    break;
+                default:
+                    throw new InvalidOperationException("Operand size type is unknown");
+            }
+
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+            int dest = eaProps.Operand;
 
             int result = src & dest;
 
             int storeDirection = (opcode >> 8) & 0x1;
             if ((StoreDirection)storeDirection == StoreDirection.Source)
             {
-                _regs.D[srcIdx] = result;
+                _memHelper.Write(result, srcIdx, StoreLocation.DataRegister, operandSize);
             }
             else
             {
-                _mem.WriteLong(eaResult.Address!.Value, result);
+                _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
             }
 
-            return eaResult.InstructionSize;
+            return eaProps.InstructionSize;
         }
 
         private void Abcd(ref byte src, ref byte dest)

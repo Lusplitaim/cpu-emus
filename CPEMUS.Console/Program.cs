@@ -1,4 +1,5 @@
 ﻿using CPEMUS.Motorola.M68000.Extensions;
+using System.Buffers.Binary;
 
 namespace CPEMUS.Console
 {
@@ -7,10 +8,17 @@ namespace CPEMUS.Console
         static int _p = 5;
         static void Main(string[] args)
         {
-            byte[] byteArray = { 0x00, 0x10 };
-            byteArray[0] = 0x80;
-            System.Console.WriteLine(byteArray.Length);
-            System.Console.WriteLine($"{Convert.ToString(byteArray.ReadSignExtByte(0), 16)}");
+            int num = 0x0A0B0C0D;
+            Span<byte> sp = new([0,0,0,0], 0, 4);
+            BinaryPrimitives.WriteInt32BigEndian(sp, num);
+
+            System.Console.Write("[ ");
+            foreach (byte b in sp)
+            {
+                System.Console.Write($"{b} ");
+            }
+            System.Console.WriteLine(" ]");
+            //System.Console.WriteLine($"{Convert.ToString(byteArray.ReadSignExtByte(0), 16)}");
         }
     }
 }
