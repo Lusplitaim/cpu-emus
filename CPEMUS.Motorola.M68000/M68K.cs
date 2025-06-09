@@ -26,12 +26,14 @@ namespace CPEMUS.Motorola.M68000
         private readonly byte[] _mem;
         private readonly EAHelper _eaHelper;
         private readonly MemHelper _memHelper;
+        private readonly FlagsHelper _flagsHelper;
         public M68K(byte[] mem)
         {
             _mem = mem;
             _regs = new();
             _memHelper = new(_regs, mem);
             _eaHelper = new(_regs, mem, _memHelper);
+            _flagsHelper = new(_regs);
         }
 
         public bool Run()
@@ -54,6 +56,10 @@ namespace CPEMUS.Motorola.M68000
             if ((opcode & 0xF000) == 0xC000)
             {
                 return Decode0xC(opcode);
+            }
+            if ((opcode & 0xF000) == 0xD000)
+            {
+                return Decode0xD(opcode);
             }
 
             throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported");
@@ -81,6 +87,11 @@ namespace CPEMUS.Motorola.M68000
             {
                 return And(opcode);
             }
+        }
+
+        private int Decode0xD(ushort opcode)
+        {
+            return Add(opcode);
         }
 
         private int Mulu()
@@ -186,6 +197,39 @@ namespace CPEMUS.Motorola.M68000
             }
 
             dest = (byte)res;
+        }
+
+        // Add.
+        private int Add(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            var dataRegIdx = (uint)((opcode >> 9) & 0x3);
+            var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+
+            long result = eaProps.Operand + dataReg;
+
+            // Flags.
+            _flagsHelper.AlterN((uint)result, operandSize);
+            _flagsHelper.AlterZ((uint)result, operandSize);
+            _flagsHelper.AlterV(dataReg, eaProps.Operand, result, operandSize);
+            _flagsHelper.AlterC(result, operandSize);
+            _regs.X = _regs.C;
+
+            // Storing.
+            int storeDirection = (opcode >> 8) & 0x1;
+            if ((StoreDirection)storeDirection == StoreDirection.Source)
+            {
+                _memHelper.Write((uint)result, dataRegIdx, StoreLocation.DataRegister, operandSize);
+            }
+            else
+            {
+                _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
+            }
+
+            return eaProps.InstructionSize;
         }
     }
 }
