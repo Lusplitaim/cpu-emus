@@ -66,6 +66,18 @@ namespace CPEMUS.Motorola.M68000.Helpers
             };
         }
 
+        public int ReadSignExt(uint address, StoreLocation location, OperandSize operandSize)
+        {
+            var operand = Read(address, location, operandSize);
+            return operandSize switch
+            {
+                OperandSize.Byte => (sbyte)operand,
+                OperandSize.Word => (short)operand,
+                OperandSize.Long => (int)operand,
+                _ => throw new InvalidOperationException("Operand size type is unknown"),
+            };
+        }
+
         public uint ReadImmediate(uint address, OperandSize operandSize)
         {
             return operandSize switch

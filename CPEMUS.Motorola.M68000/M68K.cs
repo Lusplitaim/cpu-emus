@@ -1,5 +1,4 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
-using CPEMUS.Motorola.M68000.Extensions;
 using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000
@@ -111,7 +110,7 @@ namespace CPEMUS.Motorola.M68000
 
         private int And(ushort opcode)
         {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x2);
 
             uint srcIdx = (uint)((opcode >> 9) & 0x7);
             uint src = _memHelper.Read(srcIdx, StoreLocation.DataRegister, operandSize);
@@ -143,7 +142,7 @@ namespace CPEMUS.Motorola.M68000
 
         private int Andi(ushort opcode)
         {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x2);
             var immediateDataSize = operandSize == OperandSize.Long
                 ? (int)OperandSize.Long
                 : (int)OperandSize.Word;
@@ -202,7 +201,7 @@ namespace CPEMUS.Motorola.M68000
         // Add.
         private int Add(ushort opcode)
         {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x2);
 
             var dataRegIdx = (uint)((opcode >> 9) & 0x3);
             var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
@@ -228,6 +227,36 @@ namespace CPEMUS.Motorola.M68000
             {
                 _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
             }
+
+            return eaProps.InstructionSize;
+        }
+
+        // Adda.
+        private int Adda(ushort opcode)
+        {
+            OperandSize operandSize;
+            switch ((opcode >> 6) & 0x3)
+            {
+                case 0x3:
+                    operandSize = OperandSize.Word;
+                    break;
+                case 0x7:
+                    operandSize = OperandSize.Long;
+                    break;
+                default:
+                    throw new InvalidOperationException("The given operation size is unknown.");
+
+            }
+
+            var addrRegIdx = (uint)((opcode >> 9) & 0x3);
+            var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, operandSize);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize, signExtended: true);
+
+            long result = (int)eaProps.Operand + addrReg;
+
+            // Storing.
+            _memHelper.Write((uint)result, addrRegIdx, StoreLocation.AddressRegister, operandSize);
 
             return eaProps.InstructionSize;
         }

@@ -16,7 +16,7 @@ namespace CPEMUS.Motorola.M68000.EA
             _memHelper = memHelper;
         }
 
-        public EAProps Get(ushort opcode, OperandSize operandSize, int opcodeSize = DEFAULT_OPCODE_SIZE)
+        public EAProps Get(ushort opcode, OperandSize operandSize, int opcodeSize = DEFAULT_OPCODE_SIZE, bool signExtended = false)
         {
             uint registerField = (uint)(opcode & 0x7);
             var mode = (EAMode)((opcode >> 3) & 0x7);
@@ -50,7 +50,7 @@ namespace CPEMUS.Motorola.M68000.EA
                     {
                         (getOperand, result) = GetPCDisplaceVal(opcodeSize);
                     }
-                    if (registerField == 0x3) // EA = [PC + displacement8 + Xn.size * scale].
+                    else if (registerField == 0x3) // EA = [PC + displacement8 + Xn.size * scale].
                     {
                         (getOperand, result) = GetIndexedAddressingVal(_regs.PC, opcodeSize);
                     }
@@ -77,7 +77,14 @@ namespace CPEMUS.Motorola.M68000.EA
 
             if (getOperand)
             {
-                result.Operand = _memHelper.Read(result.Address, result.Location, operandSize);
+                if (signExtended)
+                {
+                    result.Operand = (uint)_memHelper.ReadSignExt(result.Address, result.Location, operandSize);
+                }
+                else
+                {
+                    result.Operand = _memHelper.Read(result.Address, result.Location, operandSize);
+                }
             }
             result.InstructionSize += opcodeSize;
 
