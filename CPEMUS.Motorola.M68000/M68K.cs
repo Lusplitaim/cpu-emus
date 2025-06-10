@@ -6,17 +6,21 @@ namespace CPEMUS.Motorola.M68000
     public class M68K
     {
         #region Opcode suffixes.
-        private readonly int MULU_SFX = 0x00C0;
-        private readonly int MULS_SFX = 0x01C0;
-        private readonly int ABCD_SFX = 0x0100;
-        private readonly int EXG_SFX = 0x0100;
+        private const int MULU_SFX = 0x00C0;
+        private const int MULS_SFX = 0x01C0;
+        private const int ABCD_SFX = 0x0100;
+        private const int EXG_SFX = 0x0100;
+        private const int ANDI_TO_CCR_SFX = 0x023C;
+        private const int ADDI_SFX = 0x0600;
         #endregion
 
         #region Opcode masks.
-        private readonly int MULU_MASK = 0x01C0;
-        private readonly int MULS_MASK = 0x01C0;
-        private readonly int ABCD_MASK = 0x01F0;
-        private readonly int EXG_MASK = 0x0130;
+        private const int MULU_MASK = 0x01C0;
+        private const int MULS_MASK = 0x01C0;
+        private const int ABCD_MASK = 0x01F0;
+        private const int EXG_MASK = 0x0130;
+        private const int ANDI_TO_CCR_MASK = 0x023C;
+        private const int ADDI_MASK = 0xFF00;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -112,7 +116,15 @@ namespace CPEMUS.Motorola.M68000
 
         private int Decode0x0(ushort opcode)
         {
-            return Addi(opcode);
+            if ((opcode & ANDI_TO_CCR_MASK) == ANDI_TO_CCR_SFX)
+            {
+                return AndiToCcr(opcode);
+            }
+            if ((opcode & ADDI_MASK) == ADDI_SFX)
+            {
+                return Addi(opcode);
+            }
+            return Andi(opcode);
         }
 
         private int Decode0x5(ushort opcode)
@@ -192,6 +204,20 @@ namespace CPEMUS.Motorola.M68000
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
             return eaProps.InstructionSize;
+        }
+
+        // Andi to CCR.
+        private int AndiToCcr(ushort opcode)
+        {
+            uint src = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Byte);
+            var ccr = _regs.CCR;
+
+            byte result = (byte)(src & ccr);
+
+            // Storing.
+            _memHelper.Write(result, default, StoreLocation.StatusRegister, OperandSize.Byte);
+
+            return 4;
         }
 
         private void Abcd(ref byte src, ref byte dest)

@@ -25,6 +25,13 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 case StoreLocation.Memory:
                     _mem.Write(address, value, operandSize);
                     break;
+                case StoreLocation.StatusRegister:
+                    if (operandSize == OperandSize.Long)
+                    {
+                        throw new InvalidOperationException("Long operand size is not supported for status register");
+                    }
+                    Write(ref _regs.A[address], value, operandSize);
+                    break;
             }
         }
 
