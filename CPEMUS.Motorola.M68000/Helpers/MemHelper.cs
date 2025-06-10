@@ -55,36 +55,49 @@ namespace CPEMUS.Motorola.M68000.Helpers
             };
         }
 
-        public uint Read(uint address, StoreLocation location, OperandSize operandSize)
+        public uint Read(uint address, StoreLocation location, OperandSize operandSize, bool signExtended = false)
         {
-            return location switch
+            var operand = location switch
             {
                 StoreLocation.DataRegister => Read(_regs.D[address], operandSize),
                 StoreLocation.AddressRegister => Read(_regs.A[address], operandSize),
                 StoreLocation.Memory => _mem.Read(address, operandSize),
                 _ => throw new InvalidOperationException("Operand location type is unknown"),
             };
+
+            if (signExtended)
+            {
+                return (uint)ExtendOperandSign(operand, operandSize);
+            }
+
+            return operand;
         }
 
-        public int ReadSignExt(uint address, StoreLocation location, OperandSize operandSize)
+        public uint ReadImmediate(uint address, OperandSize operandSize, bool signExtended = false)
         {
-            var operand = Read(address, location, operandSize);
+            var operand = operandSize switch
+            {
+                OperandSize.Byte => _mem.ReadWord(address) & 0xFF,
+                OperandSize.Word => _mem.ReadWord(address) & 0xFFFF,
+                OperandSize.Long => _mem.ReadLong(address),
+                _ => throw new InvalidOperationException("Operand size type is unknown"),
+            };
+
+            if (signExtended)
+            {
+                return (uint)ExtendOperandSign(operand, operandSize);
+            }
+
+            return operand;
+        }
+
+        private int ExtendOperandSign(uint operand, OperandSize operandSize)
+        {
             return operandSize switch
             {
                 OperandSize.Byte => (sbyte)operand,
                 OperandSize.Word => (short)operand,
                 OperandSize.Long => (int)operand,
-                _ => throw new InvalidOperationException("Operand size type is unknown"),
-            };
-        }
-
-        public uint ReadImmediate(uint address, OperandSize operandSize)
-        {
-            return operandSize switch
-            {
-                OperandSize.Byte => _mem.ReadWord(address) & 0xFF,
-                OperandSize.Word => _mem.ReadWord(address) & 0xFFFF,
-                OperandSize.Long => _mem.ReadLong(address),
                 _ => throw new InvalidOperationException("Operand size type is unknown"),
             };
         }

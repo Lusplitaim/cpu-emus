@@ -77,14 +77,7 @@ namespace CPEMUS.Motorola.M68000.EA
 
             if (getOperand)
             {
-                if (signExtended)
-                {
-                    result.Operand = (uint)_memHelper.ReadSignExt(result.Address, result.Location, operandSize);
-                }
-                else
-                {
-                    result.Operand = _memHelper.Read(result.Address, result.Location, operandSize);
-                }
+                result.Operand = _memHelper.Read(result.Address, result.Location, operandSize, signExtended);
             }
             result.InstructionSize += opcodeSize;
 

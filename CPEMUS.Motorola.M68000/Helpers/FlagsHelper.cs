@@ -41,7 +41,7 @@
             var resultMsb = (result & mask) >> ((int)operandSize * 8 - 1);
 
             var operandsAreSameSign = op1Msb == op2Msb;
-            var resultSignDiffers = op1Msb == resultMsb;
+            var resultSignDiffers = op1Msb != resultMsb;
             _regs.V = operandsAreSameSign && resultSignDiffers;
         }
     }
