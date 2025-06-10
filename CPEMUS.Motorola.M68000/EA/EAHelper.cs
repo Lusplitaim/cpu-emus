@@ -16,6 +16,12 @@ namespace CPEMUS.Motorola.M68000.EA
             _memHelper = memHelper;
         }
 
+        public EAProps Get(EAMode eaMode, int registerField, OperandSize operandSize, int opcodeSize = DEFAULT_OPCODE_SIZE, bool signExtended = false)
+        {
+            ushort pseudoOpcode = (ushort)(((int)eaMode << 3) | (registerField & 0x7));
+            return Get(pseudoOpcode, operandSize, opcodeSize, signExtended);
+        }
+
         public EAProps Get(ushort opcode, OperandSize operandSize, int opcodeSize = DEFAULT_OPCODE_SIZE, bool signExtended = false)
         {
             uint registerField = (uint)(opcode & 0x7);

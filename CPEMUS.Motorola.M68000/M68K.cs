@@ -258,7 +258,7 @@ namespace CPEMUS.Motorola.M68000
             return eaProps.InstructionSize;
         }
 
-        // Adda.
+        // Add Address.
         private int Adda(ushort opcode)
         {
             OperandSize operandSize;
@@ -284,7 +284,7 @@ namespace CPEMUS.Motorola.M68000
             long result = (int)eaProps.Operand + addrReg;
 
             // Storing.
-            _memHelper.Write((uint)result, addrRegIdx, StoreLocation.AddressRegister, operandSize);
+            _memHelper.Write((uint)result, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
             return eaProps.InstructionSize;
         }
@@ -347,6 +347,33 @@ namespace CPEMUS.Motorola.M68000
             _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
 
             return eaProps.InstructionSize;
+        }
+
+        // Add Extended.
+        private int Addx(ushort opcode)
+        {
+            var eaMode = ((opcode >> 3) & 0x1) == 0 ? EAMode.DataDirect : EAMode.PredecIndirect;
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            var destRegIdx = (uint)((opcode >> 9) & 0x7);
+            var destRegProps = _eaHelper.Get(eaMode, (int)destRegIdx, operandSize);
+
+            var srcRegIdx = (uint)(opcode & 0x7);
+            var srcRegProps = _eaHelper.Get(eaMode, (int)srcRegIdx, operandSize);
+
+            long result = destRegProps.Operand + srcRegProps.Operand + (_regs.X ? 1 : 0);
+
+            // Flags.
+            _flagsHelper.AlterN((uint)result, operandSize);
+            _flagsHelper.AlterZ((uint)result, operandSize); // TODO: Cleared if the result is nonzero; unchanged otherwise.
+            _flagsHelper.AlterV(destRegProps.Operand, srcRegProps.Operand, result, operandSize);
+            _flagsHelper.AlterC(result, operandSize);
+            _regs.X = _regs.C;
+
+            // Storing.
+            _memHelper.Write((uint)result, destRegProps.Address, destRegProps.Location, operandSize);
+
+            return destRegProps.InstructionSize;
         }
     }
 }
