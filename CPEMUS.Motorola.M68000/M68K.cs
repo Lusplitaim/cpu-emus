@@ -65,6 +65,10 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Decode0x0(opcode);
             }
+            if ((opcode & 0xF000) == 0x5000)
+            {
+                return Decode0x5(opcode);
+            }
             if ((opcode & 0xF000) == 0xC000)
             {
                 return Decode0xC(opcode);
@@ -109,6 +113,11 @@ namespace CPEMUS.Motorola.M68000
         private int Decode0x0(ushort opcode)
         {
             return Addi(opcode);
+        }
+
+        private int Decode0x5(ushort opcode)
+        {
+            return Addq(opcode);
         }
 
         private int Mulu()
@@ -298,6 +307,41 @@ namespace CPEMUS.Motorola.M68000
             _flagsHelper.AlterV((uint)immediateOperand, eaProps.Operand, result, operandSize);
             _flagsHelper.AlterC(result, operandSize);
             _regs.X = _regs.C;
+
+            // Storing.
+            _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
+
+            return eaProps.InstructionSize;
+        }
+
+        // Add Quick.
+        private int Addq(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            var dataField = (opcode >> 6) & 0x3;
+            var immediateOperand = dataField == 0 ? 8 : dataField;
+
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+            bool isEaAddressRegister = eaProps.Location == StoreLocation.AddressRegister;
+            if (isEaAddressRegister)
+            {
+                // The entire destination address register is used regardless of the operation size.
+                operandSize = OperandSize.Long;
+                eaProps = _eaHelper.Get(opcode, operandSize);
+            }
+
+            long result = eaProps.Operand + immediateOperand;
+
+            // When adding to address registers, the condition codes are not altered.
+            if (!isEaAddressRegister)
+            {
+                _flagsHelper.AlterN((uint)result, operandSize);
+                _flagsHelper.AlterZ((uint)result, operandSize);
+                _flagsHelper.AlterV((uint)immediateOperand, eaProps.Operand, result, operandSize);
+                _flagsHelper.AlterC(result, operandSize);
+                _regs.X = _regs.C;
+            }
 
             // Storing.
             _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
