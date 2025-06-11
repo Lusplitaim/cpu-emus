@@ -4,9 +4,9 @@ namespace CPEMUS.Motorola.M68000.Helpers
 {
     internal class MemHelper
     {
-        private readonly byte[] _mem;
+        private readonly IList<byte> _mem;
         private readonly M68KRegs _regs;
-        public MemHelper(M68KRegs regs, byte[] mem)
+        public MemHelper(M68KRegs regs, IList<byte> mem)
         {
             _mem = mem;
             _regs = regs;

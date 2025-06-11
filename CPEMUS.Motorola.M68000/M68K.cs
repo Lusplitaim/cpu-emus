@@ -26,11 +26,15 @@ namespace CPEMUS.Motorola.M68000
         private const int INSTR_DEFAULT_SIZE = 2;
 
         private readonly M68KRegs _regs;
-        private readonly byte[] _mem;
+        private readonly IList<byte> _mem;
         private readonly EAHelper _eaHelper;
         private readonly MemHelper _memHelper;
         private readonly FlagsHelper _flagsHelper;
-        public M68K(byte[] mem)
+
+        public IList<byte> Memory {  get { return _mem; } }
+        public M68KRegs Registers {  get { return _regs; } }
+
+        public M68K(IList<byte> mem)
         {
             _mem = mem;
             _regs = new();
@@ -39,7 +43,7 @@ namespace CPEMUS.Motorola.M68000
             _flagsHelper = new(_regs);
         }
 
-        public M68K(byte[] mem, M68KRegs regs)
+        public M68K(IList<byte> mem, M68KRegs regs)
         {
             _mem = mem;
             _regs = regs;
@@ -50,17 +54,19 @@ namespace CPEMUS.Motorola.M68000
 
         public bool Run()
         {
-            if (_regs.PC >= _mem.Length)
+            try
+            {
+                var opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
+                var instructionSize = DecodeOpcode(opcode);
+
+                _regs.PC += (uint)instructionSize;
+
+                return true;
+            }
+            catch (IndexOutOfRangeException)
             {
                 return false;
             }
-
-            var opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
-            var instructionSize = DecodeOpcode(opcode);
-
-            _regs.PC += (uint)instructionSize;
-
-            return true;
         }
 
         public int DecodeOpcode(ushort opcode)

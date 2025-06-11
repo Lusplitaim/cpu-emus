@@ -8,8 +8,8 @@ namespace CPEMUS.Motorola.M68000.EA
         private const int DEFAULT_OPCODE_SIZE = 2;
         private readonly M68KRegs _regs;
         private readonly MemHelper _memHelper;
-        private readonly byte[] _mem;
-        public EAHelper(M68KRegs regs, byte[] memory, MemHelper memHelper)
+        private readonly IList<byte> _mem;
+        public EAHelper(M68KRegs regs, IList<byte> memory, MemHelper memHelper)
         {
             _regs = regs;
             _mem = memory;
@@ -187,7 +187,7 @@ namespace CPEMUS.Motorola.M68000.EA
                 indexRegister = (short)(indexRegister & 0xFFFF);
             }
 
-            int scale = (extWord & 0x0600) >> 9;
+            int scale = (extWord >> 9) & 0x3;
             
             uint address = (uint)(an + displacement + indexRegister * (int)Math.Pow(2, scale));
 
