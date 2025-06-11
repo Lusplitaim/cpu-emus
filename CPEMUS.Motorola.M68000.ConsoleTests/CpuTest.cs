@@ -37,20 +37,15 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             regs.CCR = cpuState.Sr;
             regs.PC = cpuState.Pc;
 
-            IList<byte> memTest = new MemTest(cpuState.Ram);
-
             // Writing opcode to memory.
-            memTest.WriteWord(opcodeAddress, opcode);
+            cpuState.Ram.Add([opcodeAddress, (uint)(opcode >> 8)]);
+            cpuState.Ram.Add([opcodeAddress + 1, opcode]);
 
-            try
-            {
-                // Trying to write possibly required immediate data to memory.
-                memTest.WriteWord(opcodeAddress + 2, immediateData);
-            }
-            catch (IndexOutOfRangeException)
-            {
-                // Immediate data is not required, ignoring ex.
-            }
+            // Writing possibly required immediate data to memory.
+            cpuState.Ram.Add([opcodeAddress + 2, (immediateData >> 8)]);
+            cpuState.Ram.Add([opcodeAddress + 3, immediateData]);
+
+            IList<byte> memTest = new MemTest(cpuState.Ram);
 
             return new(memTest, regs);
         }

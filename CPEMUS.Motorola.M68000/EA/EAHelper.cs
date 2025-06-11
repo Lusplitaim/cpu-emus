@@ -189,7 +189,7 @@ namespace CPEMUS.Motorola.M68000.EA
 
             int scale = (extWord >> 9) & 0x3;
             
-            uint address = (uint)(an + displacement + indexRegister * (int)Math.Pow(2, scale));
+            uint address = (uint)(an + displacement + indexRegister);
 
             return (true, new()
             {

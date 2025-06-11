@@ -262,7 +262,7 @@ namespace CPEMUS.Motorola.M68000
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
-            var dataRegIdx = (uint)((opcode >> 9) & 0x3);
+            var dataRegIdx = (uint)((opcode >> 9) & 0x7);
             var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
 
             var eaProps = _eaHelper.Get(opcode, operandSize);

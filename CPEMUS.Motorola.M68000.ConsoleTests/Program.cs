@@ -6,7 +6,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
     {
         static void Main(string[] args)
         {
-            var filePath = "C:\\Users\\LOBAN5825\\Desktop\\repos\\m68000-tests\\v1\\ADD.b.json";
+            var filePath = "C:\\Users\\Lusplitaim\\Desktop\\projects\\m68k-tests\\ADD.b.json";
 
             using var streamReader = File.OpenText(filePath);
 
@@ -29,7 +29,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
                     var expected = CpuTest.ToM68K(testCases[i].Final, opcode, immediateData, opcodeAddress);
                     if (!CpuTest.Assert(cpu, expected))
                     {
-                        Console.WriteLine($"Failed on {i} test case.");
+                        Console.WriteLine($"Failed on {i+1} test case.");
                         return;
                     }
                 }
