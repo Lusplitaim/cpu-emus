@@ -4,6 +4,8 @@ namespace CPEMUS.Motorola.M68000.Helpers
 {
     internal class MemHelper
     {
+        private const int SP_ADDRESS = 7;
+
         private readonly IList<byte> _mem;
         private readonly M68KRegs _regs;
         public MemHelper(M68KRegs regs, IList<byte> mem)
@@ -20,6 +22,11 @@ namespace CPEMUS.Motorola.M68000.Helpers
                     Write(ref _regs.D[address], value, operandSize);
                     break;
                 case StoreLocation.AddressRegister:
+                    if (address == SP_ADDRESS)
+                    {
+                        _regs.SP = MergeDestWithValue(_regs.SP, value, operandSize);
+                        return;
+                    }
                     Write(ref _regs.A[address], value, operandSize);
                     break;
                 case StoreLocation.Memory:
@@ -30,25 +37,25 @@ namespace CPEMUS.Motorola.M68000.Helpers
                     {
                         throw new InvalidOperationException("Long operand size is not supported for status register");
                     }
-                    Write(ref _regs.A[address], value, operandSize);
+                    _regs.SR = (ushort)MergeDestWithValue(_regs.SR, value, operandSize);
                     break;
             }
         }
 
         public void Write(ref uint dest, uint value, OperandSize operandSize)
         {
-            switch (operandSize)
+            dest = MergeDestWithValue(dest, value, operandSize);
+        }
+
+        private uint MergeDestWithValue(uint dest, uint value, OperandSize operandSize)
+        {
+            return operandSize switch
             {
-                case OperandSize.Byte:
-                    dest = (uint)((dest & (~0xFF)) | (value & 0xFF));
-                    break;
-                case OperandSize.Word:
-                    dest = (uint)((dest & (~0xFFFF)) | (value & 0xFFFF));
-                    break;
-                case OperandSize.Long:
-                    dest = value;
-                    break;
-            }
+                OperandSize.Byte => (uint)((dest & (~0xFF)) | (value & 0xFF)),
+                OperandSize.Word => (uint)((dest & (~0xFFFF)) | (value & 0xFFFF)),
+                OperandSize.Long => value,
+                _ => throw new InvalidOperationException("Operand size type is unknown"),
+            };
         }
 
         public uint Read(uint value, OperandSize operandSize)
@@ -67,7 +74,9 @@ namespace CPEMUS.Motorola.M68000.Helpers
             var operand = location switch
             {
                 StoreLocation.DataRegister => Read(_regs.D[address], operandSize),
-                StoreLocation.AddressRegister => Read(_regs.A[address], operandSize),
+                StoreLocation.AddressRegister => address == SP_ADDRESS
+                    ? Read(_regs.SP, operandSize)
+                    : Read(_regs.A[address], operandSize),
                 StoreLocation.Memory => _mem.Read(address, operandSize),
                 _ => throw new InvalidOperationException("Operand location type is unknown"),
             };

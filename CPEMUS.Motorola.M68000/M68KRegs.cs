@@ -12,22 +12,48 @@
         public uint[] D = new uint[8];
 
         // Address registers.
-        public uint[] A = new uint[8];
+        public uint[] A = new uint[7];
 
-        // User Stack Pouinter.
+        // User Stack Pointer.
         public uint USP
         {
-            get => A[7];
-            set => A[7] = value;
+            get;
+            set;
         }
+
+        // Supervisor Stack Pointer.
+        public uint SSP
+        {
+            get;
+            set;
+        }
+
+        // Stack Pointer.
+        public uint SP
+        {
+            get => Mode == MPrivilegeMode.User ? USP : SSP;
+            set
+            {
+                if (Mode == MPrivilegeMode.User)
+                {
+                    USP = value;
+                }
+                else
+                {
+                    SSP = value;
+                }
+            }
+        }
+
+        public MPrivilegeMode Mode => (MPrivilegeMode)((SR >> 13) & 0x1);
 
         // Program Counter.
         public uint PC { get; set; }
 
-        // Condition Code Register.
+        // Status Register.
         // Upper byte is read as all zeroes
         // and is ignored when written.
-        public ushort CCR;
+        public ushort SR;
 
         #region Flags.
         public bool X
@@ -56,16 +82,16 @@
             set => UpdateFlag(value, NMask);
         }
 
-        private bool IsFlagSet(int flagMask) => (CCR & flagMask) == flagMask;
+        private bool IsFlagSet(int flagMask) => (SR & flagMask) == flagMask;
         private void UpdateFlag(bool set, int flagMask)
         {
             if (set)
             {
-                CCR |= (ushort)flagMask;
+                SR |= (ushort)flagMask;
             }
             else
             {
-                CCR &= (ushort)~flagMask;
+                SR &= (ushort)~flagMask;
             }
         }
         #endregion

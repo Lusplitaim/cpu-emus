@@ -216,7 +216,7 @@ namespace CPEMUS.Motorola.M68000
         private int AndiToCcr(ushort opcode)
         {
             uint src = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Byte);
-            var ccr = _regs.CCR;
+            var ccr = _regs.SR;
 
             byte result = (byte)(src & ccr);
 
@@ -351,7 +351,7 @@ namespace CPEMUS.Motorola.M68000
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
-            var dataField = (opcode >> 6) & 0x3;
+            var dataField = (opcode >> 9) & 0x7;
             var immediateOperand = dataField == 0 ? 8 : dataField;
 
             var eaProps = _eaHelper.Get(opcode, operandSize);

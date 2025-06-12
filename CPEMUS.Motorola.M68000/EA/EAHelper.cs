@@ -49,7 +49,7 @@ namespace CPEMUS.Motorola.M68000.EA
                     (getOperand, result) = GetAnIndirectDisplaceVal(registerField, opcodeSize);
                     break;
                 case EAMode.IndexedAddressing: // EA = [An + displacement8 + Xn.size * scale].
-                    (getOperand, result) = GetIndexedAddressingVal(_regs.A[registerField], opcodeSize);
+                    (getOperand, result) = GetIndexedAddressingVal(ReadAddressReg(registerField), opcodeSize);
                     break;
                 case EAMode.PCAbsoluteImmediate:
                     if (registerField == 0x2) // EA = [PC + displacement16].
@@ -58,7 +58,7 @@ namespace CPEMUS.Motorola.M68000.EA
                     }
                     else if (registerField == 0x3) // EA = [PC + displacement8 + Xn.size * scale].
                     {
-                        (getOperand, result) = GetIndexedAddressingVal(_regs.PC, opcodeSize);
+                        (getOperand, result) = GetIndexedAddressingVal((uint)(_regs.PC + opcodeSize), opcodeSize);
                     }
                     else if (registerField == 0x0)
                     {
@@ -90,6 +90,16 @@ namespace CPEMUS.Motorola.M68000.EA
             return result;
         }
 
+        private uint ReadAddressReg(uint idx)
+        {
+            return _memHelper.Read(idx, StoreLocation.AddressRegister, OperandSize.Long);
+        }
+
+        private void WriteToAddressReg(uint idx, uint val)
+        {
+            _memHelper.Write(val, idx, StoreLocation.AddressRegister, OperandSize.Long);
+        }
+
         private (bool getOperand, EAProps props) GetDnDirectVal(uint idx)
         {
              return (true, new()
@@ -112,15 +122,15 @@ namespace CPEMUS.Motorola.M68000.EA
         {
             return (true, new()
             {
-                Address = _regs.A[idx],
+                Address = ReadAddressReg(idx),
                 Location = StoreLocation.Memory,
             });
         }
 
         private (bool getOperand, EAProps props) GetAnIndirectPostincVal(uint idx, OperandSize operandSize)
         {
-            uint address = _regs.A[idx];
-            _regs.A[idx] += CalcAddressIncOrDecVal(idx, operandSize);
+            uint address = ReadAddressReg(idx);
+            WriteToAddressReg(idx, ReadAddressReg(idx) + CalcAddressIncOrDecVal(idx, operandSize));
             return (true, new()
             {
                 Address = address,
@@ -130,8 +140,8 @@ namespace CPEMUS.Motorola.M68000.EA
 
         private (bool getOperand, EAProps props) GetAnIndirectPredecVal(uint idx, OperandSize operandSize)
         {
-            _regs.A[idx] -= CalcAddressIncOrDecVal(idx, operandSize);
-            uint address = _regs.A[idx];
+            WriteToAddressReg(idx, ReadAddressReg(idx) - CalcAddressIncOrDecVal(idx, operandSize));
+            uint address = ReadAddressReg(idx);
             return (true, new()
             {
                 Address = address,
@@ -155,7 +165,7 @@ namespace CPEMUS.Motorola.M68000.EA
 
         private (bool getOperand, EAProps props) GetAnIndirectDisplaceVal(uint idx, int opcodeSize)
         {
-            var an = _regs.A[idx];
+            var an = ReadAddressReg(idx);
             int displacement = (short)_mem.ReadWord((uint)(_regs.PC + opcodeSize));
             uint address = (uint)(an + displacement);
             return (true, new()
@@ -175,7 +185,7 @@ namespace CPEMUS.Motorola.M68000.EA
             int indexRegister;
             if ((IndexRegister)((extWord >> 15) & 0x1) == IndexRegister.Address)
             {
-                indexRegister = (int)_regs.A[indexRegisterIdx];
+                indexRegister = (int)ReadAddressReg((uint)indexRegisterIdx);
             }
             else
             {

@@ -32,9 +32,10 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             regs.A[4] = cpuState.A4;
             regs.A[5] = cpuState.A5;
             regs.A[6] = cpuState.A6;
-            regs.A[7] = cpuState.Usp;
+            regs.USP = cpuState.Usp;
+            regs.SSP = cpuState.Ssp;
 
-            regs.CCR = cpuState.Sr;
+            regs.SR = cpuState.Sr;
             regs.PC = cpuState.Pc;
 
             // Writing opcode to memory.
@@ -55,11 +56,13 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             bool memIdentical = CompareMemory(fact.Memory, expected.Memory);
             bool dataRegsIdentical = fact.Registers.D.SequenceEqual(expected.Registers.D);
             bool addressRegsIdentical = fact.Registers.A.SequenceEqual(expected.Registers.A);
-            bool srIdentical = fact.Registers.CCR == expected.Registers.CCR;
+            bool uspIdentical = fact.Registers.USP == expected.Registers.USP;
+            bool sspIdentical = fact.Registers.SSP == expected.Registers.SSP;
+            bool srIdentical = fact.Registers.SR == expected.Registers.SR;
             bool pcIdentical = fact.Registers.PC == expected.Registers.PC;
 
             return memIdentical && dataRegsIdentical && addressRegsIdentical
-                && srIdentical && pcIdentical;
+                && uspIdentical && sspIdentical && srIdentical && pcIdentical;
         }
 
         private static bool CompareMemory(ICollection<byte> first, ICollection<byte> second)
