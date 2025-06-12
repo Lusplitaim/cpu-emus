@@ -213,7 +213,7 @@ namespace CPEMUS.Motorola.M68000.EA
         {
             var pc = _regs.PC;
             int displacement = (short)_mem.ReadWord((uint)(pc + opcodeSize));
-            uint address = (uint)(pc + displacement);
+            uint address = (uint)(pc + opcodeSize + displacement);
             return (true, new()
             {
                 Address = address,

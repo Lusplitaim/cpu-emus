@@ -12,6 +12,8 @@ namespace CPEMUS.Motorola.M68000
         private const int EXG_SFX = 0x0100;
         private const int ANDI_TO_CCR_SFX = 0x023C;
         private const int ADDI_SFX = 0x0600;
+        private const int ADDA_SFX_1 = 0xD0C0;
+        private const int ADDA_SFX_2 = 0xD1C0;
         #endregion
 
         #region Opcode masks.
@@ -21,6 +23,7 @@ namespace CPEMUS.Motorola.M68000
         private const int EXG_MASK = 0x0130;
         private const int ANDI_TO_CCR_MASK = 0x023C;
         private const int ADDI_MASK = 0xFF00;
+        private const int ADDA_MASK = 0xF1C0;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -117,6 +120,12 @@ namespace CPEMUS.Motorola.M68000
 
         private int Decode0xD(ushort opcode)
         {
+            bool isAdda = (opcode & ADDA_MASK) == ADDA_SFX_1
+                || (opcode & ADDA_MASK) == ADDA_SFX_2;
+            if (isAdda)
+            {
+                return Adda(opcode);
+            }
             return Add(opcode);
         }
 
@@ -307,11 +316,11 @@ namespace CPEMUS.Motorola.M68000
 
             }
 
-            var addrRegIdx = (uint)((opcode >> 9) & 0x3);
+            var addrRegIdx = (uint)((opcode >> 9) & 0x7);
             // The entire destination address register is used regardless of the operation size.
             var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
-            var eaProps = _eaHelper.Get(opcode, operandSize);
+            var eaProps = _eaHelper.Get(opcode, operandSize, signExtended: true);
 
             long result = (int)eaProps.Operand + addrReg;
 
