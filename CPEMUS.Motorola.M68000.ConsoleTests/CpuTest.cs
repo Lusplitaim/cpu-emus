@@ -10,7 +10,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
         public int Length { get; set; }
         public List<List<object>> Transactions { get; set; }
 
-        public static M68K ToM68K(CpuState cpuState, ushort opcode, uint immediateData, uint opcodeAddress)
+        public static M68K ToM68K(CpuState cpuState)
         {
             M68KRegs regs = new();
 
@@ -36,15 +36,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             regs.SSP = cpuState.Ssp;
 
             regs.SR = cpuState.Sr;
-            regs.PC = cpuState.Pc;
-
-            // Writing opcode to memory.
-            cpuState.Ram.Add([opcodeAddress, (uint)(opcode >> 8)]);
-            cpuState.Ram.Add([opcodeAddress + 1, opcode]);
-
-            // Writing possibly required immediate data to memory.
-            cpuState.Ram.Add([opcodeAddress + 2, (immediateData >> 8)]);
-            cpuState.Ram.Add([opcodeAddress + 3, immediateData]);
+            regs.PC = cpuState.Pc - 4;
 
             IList<byte> memTest = new MemTest(cpuState.Ram);
 

@@ -1,9 +1,10 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
 using CPEMUS.Motorola.M68000.Helpers;
+using System.Reflection.Emit;
 
 namespace CPEMUS.Motorola.M68000
 {
-    public class M68K
+    public partial class M68K
     {
         #region Opcode suffixes.
         private const int MULU_SFX = 0x00C0;
@@ -14,6 +15,9 @@ namespace CPEMUS.Motorola.M68000
         private const int ADDI_SFX = 0x0600;
         private const int ADDA_SFX_1 = 0xD0C0;
         private const int ADDA_SFX_2 = 0xD1C0;
+        private const int ASL_ASR_SFX = 0xE0C0;
+        private const int BRA_SFX = 0x6000;
+        private const int BSR_SFX = 0x6100;
         #endregion
 
         #region Opcode masks.
@@ -24,6 +28,9 @@ namespace CPEMUS.Motorola.M68000
         private const int ANDI_TO_CCR_MASK = 0x023C;
         private const int ADDI_MASK = 0xFF00;
         private const int ADDA_MASK = 0xF1C0;
+        private const int ASL_ASR_MASK = 0xFEC0;
+        private const int BRA_MASK = 0xFF00;
+        private const int BSR_MASK = 0xFF00;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -57,41 +64,35 @@ namespace CPEMUS.Motorola.M68000
 
         public bool Run()
         {
+            ushort opcode;
             try
             {
-                var opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
-                var instructionSize = DecodeOpcode(opcode);
-
-                _regs.PC += (uint)instructionSize;
-
-                return true;
+                opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
             }
             catch (IndexOutOfRangeException)
             {
                 return false;
             }
+
+            var instructionSize = DecodeOpcode(opcode);
+
+            _regs.PC += (uint)instructionSize;
+
+            return true;
         }
 
         public int DecodeOpcode(ushort opcode)
         {
-            if ((opcode & 0xF000) == 0x0000)
+            return (opcode & 0xF000) switch
             {
-                return Decode0x0(opcode);
-            }
-            if ((opcode & 0xF000) == 0x5000)
-            {
-                return Decode0x5(opcode);
-            }
-            if ((opcode & 0xF000) == 0xC000)
-            {
-                return Decode0xC(opcode);
-            }
-            if ((opcode & 0xF000) == 0xD000)
-            {
-                return Decode0xD(opcode);
-            }
-
-            throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported");
+                0x0000 => Decode0x0(opcode),
+                0x5000 => Decode0x5(opcode),
+                0x6000 => Decode0x6(opcode),
+                0xC000 => Decode0xC(opcode),
+                0xD000 => Decode0xD(opcode),
+                0xE000 => Decode0xE(opcode),
+                _ => throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported"),
+            };
         }
 
         private int Decode0xC(ushort opcode)
@@ -129,6 +130,15 @@ namespace CPEMUS.Motorola.M68000
             return Add(opcode);
         }
 
+        private int Decode0xE(ushort opcode)
+        {
+            if ((opcode & ASL_ASR_MASK) == ASL_ASR_SFX)
+            {
+                return AslAsr(opcode);
+            }
+            return AslAsr(opcode);
+        }
+
         private int Decode0x0(ushort opcode)
         {
             if ((opcode & ANDI_TO_CCR_MASK) == ANDI_TO_CCR_SFX)
@@ -147,14 +157,17 @@ namespace CPEMUS.Motorola.M68000
             return Addq(opcode);
         }
 
-        private int Mulu()
+        private int Decode0x6(ushort opcode)
         {
-            throw new NotImplementedException();
-        }
-
-        private int Muls()
-        {
-            throw new NotImplementedException();
+            if ((opcode & BRA_MASK) == BRA_SFX)
+            {
+                return Bra(opcode);
+            }
+            if ((opcode & BSR_MASK) == BSR_SFX)
+            {
+                return Bsr(opcode);
+            }
+            return Bcc(opcode);
         }
 
         private int Exg()
@@ -264,157 +277,6 @@ namespace CPEMUS.Motorola.M68000
             }
 
             dest = (byte)res;
-        }
-
-        // Add.
-        private int Add(ushort opcode)
-        {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-
-            var dataRegIdx = (uint)((opcode >> 9) & 0x7);
-            var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
-
-            var eaProps = _eaHelper.Get(opcode, operandSize);
-
-            long result = eaProps.Operand + dataReg;
-
-            // Flags.
-            _flagsHelper.AlterN((uint)result, operandSize);
-            _flagsHelper.AlterZ((uint)result, operandSize);
-            _flagsHelper.AlterV(dataReg, eaProps.Operand, result, operandSize);
-            _flagsHelper.AlterC(result, operandSize);
-            _regs.X = _regs.C;
-
-            // Storing.
-            int storeDirection = (opcode >> 8) & 0x1;
-            if ((StoreDirection)storeDirection == StoreDirection.Source)
-            {
-                _memHelper.Write((uint)result, dataRegIdx, StoreLocation.DataRegister, operandSize);
-            }
-            else
-            {
-                _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
-            }
-
-            return eaProps.InstructionSize;
-        }
-
-        // Add Address.
-        private int Adda(ushort opcode)
-        {
-            OperandSize operandSize;
-            switch ((opcode >> 6) & 0x7)
-            {
-                case 0x3:
-                    operandSize = OperandSize.Word;
-                    break;
-                case 0x7:
-                    operandSize = OperandSize.Long;
-                    break;
-                default:
-                    throw new InvalidOperationException("The given operation size is unknown.");
-
-            }
-
-            var addrRegIdx = (uint)((opcode >> 9) & 0x7);
-            // The entire destination address register is used regardless of the operation size.
-            var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
-
-            var eaProps = _eaHelper.Get(opcode, operandSize, signExtended: true);
-
-            long result = (int)eaProps.Operand + addrReg;
-
-            // Storing.
-            _memHelper.Write((uint)result, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
-
-            return eaProps.InstructionSize;
-        }
-
-        // Add Immediate.
-        private int Addi(ushort opcode)
-        {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-
-            var immediateOperand = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, operandSize);
-
-            var opcodeSize = INSTR_DEFAULT_SIZE + (operandSize == OperandSize.Byte ? 2 : (int)operandSize);
-            var eaProps = _eaHelper.Get(opcode, operandSize, opcodeSize);
-
-            long result = eaProps.Operand + immediateOperand;
-
-            // Flags.
-            _flagsHelper.AlterN((uint)result, operandSize);
-            _flagsHelper.AlterZ((uint)result, operandSize);
-            _flagsHelper.AlterV((uint)immediateOperand, eaProps.Operand, result, operandSize);
-            _flagsHelper.AlterC(result, operandSize);
-            _regs.X = _regs.C;
-
-            // Storing.
-            _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
-
-            return eaProps.InstructionSize;
-        }
-
-        // Add Quick.
-        private int Addq(ushort opcode)
-        {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-
-            var dataField = (opcode >> 9) & 0x7;
-            var immediateOperand = dataField == 0 ? 8 : dataField;
-
-            var eaProps = _eaHelper.Get(opcode, operandSize);
-            bool isEaAddressRegister = eaProps.Location == StoreLocation.AddressRegister;
-            if (isEaAddressRegister)
-            {
-                // The entire destination address register is used regardless of the operation size.
-                operandSize = OperandSize.Long;
-                eaProps = _eaHelper.Get(opcode, operandSize);
-            }
-
-            long result = eaProps.Operand + immediateOperand;
-
-            // When adding to address registers, the condition codes are not altered.
-            if (!isEaAddressRegister)
-            {
-                _flagsHelper.AlterN((uint)result, operandSize);
-                _flagsHelper.AlterZ((uint)result, operandSize);
-                _flagsHelper.AlterV((uint)immediateOperand, eaProps.Operand, result, operandSize);
-                _flagsHelper.AlterC(result, operandSize);
-                _regs.X = _regs.C;
-            }
-
-            // Storing.
-            _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
-
-            return eaProps.InstructionSize;
-        }
-
-        // Add Extended.
-        private int Addx(ushort opcode)
-        {
-            var eaMode = ((opcode >> 3) & 0x1) == 0 ? EAMode.DataDirect : EAMode.PredecIndirect;
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-
-            var destRegIdx = (uint)((opcode >> 9) & 0x7);
-            var destRegProps = _eaHelper.Get(eaMode, (int)destRegIdx, operandSize);
-
-            var srcRegIdx = (uint)(opcode & 0x7);
-            var srcRegProps = _eaHelper.Get(eaMode, (int)srcRegIdx, operandSize);
-
-            long result = destRegProps.Operand + srcRegProps.Operand + (_regs.X ? 1 : 0);
-
-            // Flags.
-            _flagsHelper.AlterN((uint)result, operandSize);
-            _flagsHelper.AlterZ((uint)result, operandSize); // TODO: Cleared if the result is nonzero; unchanged otherwise.
-            _flagsHelper.AlterV(destRegProps.Operand, srcRegProps.Operand, result, operandSize);
-            _flagsHelper.AlterC(result, operandSize);
-            _regs.X = _regs.C;
-
-            // Storing.
-            _memHelper.Write((uint)result, destRegProps.Address, destRegProps.Location, operandSize);
-
-            return destRegProps.InstructionSize;
         }
     }
 }
