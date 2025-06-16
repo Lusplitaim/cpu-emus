@@ -1,6 +1,5 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
 using CPEMUS.Motorola.M68000.Helpers;
-using System.Reflection.Emit;
 
 namespace CPEMUS.Motorola.M68000
 {
@@ -12,12 +11,15 @@ namespace CPEMUS.Motorola.M68000
         private const int ABCD_SFX = 0x0100;
         private const int EXG_SFX = 0x0100;
         private const int ANDI_TO_CCR_SFX = 0x023C;
+        private const int ANDI_SFX = 0x0200;
         private const int ADDI_SFX = 0x0600;
         private const int ADDA_SFX_1 = 0xD0C0;
         private const int ADDA_SFX_2 = 0xD1C0;
         private const int ASL_ASR_SFX = 0xE0C0;
         private const int BRA_SFX = 0x6000;
         private const int BSR_SFX = 0x6100;
+        private const int BCHG_SFX_1 = 0x0140;
+        private const int BCHG_SFX_2 = 0x0840;
         #endregion
 
         #region Opcode masks.
@@ -26,11 +28,14 @@ namespace CPEMUS.Motorola.M68000
         private const int ABCD_MASK = 0x01F0;
         private const int EXG_MASK = 0x0130;
         private const int ANDI_TO_CCR_MASK = 0x023C;
+        private const int ANDI_MASK = 0xFF00;
         private const int ADDI_MASK = 0xFF00;
         private const int ADDA_MASK = 0xF1C0;
         private const int ASL_ASR_MASK = 0xFEC0;
         private const int BRA_MASK = 0xFF00;
         private const int BSR_MASK = 0xFF00;
+        private const int BCHG_MASK_1 = 0xF1C0;
+        private const int BCHG_MASK_2 = 0xFFC0;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -149,7 +154,19 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Addi(opcode);
             }
-            return Andi(opcode);
+            if ((opcode & ANDI_MASK) == ANDI_SFX)
+            {
+                return Andi(opcode);
+            }
+            if ((opcode & BCHG_MASK_1) == BCHG_SFX_1)
+            {
+                return Bchg(opcode, srcImmediate: false);
+            }
+            if ((opcode & BCHG_MASK_2) == BCHG_SFX_2)
+            {
+                return Bchg(opcode, srcImmediate: true);
+            }
+            throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
         private int Decode0x5(ushort opcode)

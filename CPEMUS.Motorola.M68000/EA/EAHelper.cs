@@ -52,30 +52,15 @@ namespace CPEMUS.Motorola.M68000.EA
                     (getOperand, result) = GetIndexedAddressingVal(ReadAddressReg(registerField), opcodeSize);
                     break;
                 case EAMode.PCAbsoluteImmediate:
-                    if (registerField == 0x2) // EA = [PC + displacement16].
+                    (getOperand, result) = registerField switch
                     {
-                        (getOperand, result) = GetPCDisplaceVal(opcodeSize);
-                    }
-                    else if (registerField == 0x3) // EA = [PC + displacement8 + Xn.size * scale].
-                    {
-                        (getOperand, result) = GetIndexedAddressingVal((uint)(_regs.PC + opcodeSize), opcodeSize);
-                    }
-                    else if (registerField == 0x0)
-                    {
-                        (getOperand, result) = GetAbsoluteVal(true, opcodeSize);
-                    }
-                    else if (registerField == 0x1)
-                    {
-                        (getOperand, result) = GetAbsoluteVal(false, opcodeSize);
-                    }
-                    else if (registerField == 0x4)
-                    {
-                        (getOperand, result) = GetImmediateVal(operandSize, opcodeSize);
-                    }
-                    else
-                    {
-                        throw new NotImplementedException("This addressing mode is unknown or not implemented.");
-                    }
+                        0x0 => GetAbsoluteVal(word: true, opcodeSize),
+                        0x1 => GetAbsoluteVal(word: false, opcodeSize),
+                        0x2 => GetPCDisplaceVal(opcodeSize), // EA = [PC + displacement16].
+                        0x3 => GetIndexedAddressingVal((uint)(_regs.PC + opcodeSize), opcodeSize), // EA = [PC + displacement8 + Xn.size * scale].
+                        0x4 => GetImmediateVal(operandSize, opcodeSize),
+                        _ => throw new NotImplementedException("This addressing mode is unknown or not implemented."),
+                    };
                     break;
                 default:
                     throw new NotImplementedException("This addressing mode is unknown or not implemented.");
