@@ -4,7 +4,7 @@ namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        private int TestAndChangeBit(ushort opcode, bool srcImmediate, Func<uint, int, uint> changeBit)
+        private int TestAndChangeBit(ushort opcode, bool srcImmediate, bool updateDestValue, Func<uint, int, uint> changeBit)
         {
             var mode = (EAMode)((opcode >> 3) & 0x7);
             var operandSize = mode == EAMode.DataDirect ? OperandSize.Long : OperandSize.Byte;
@@ -27,7 +27,10 @@ namespace CPEMUS.Motorola.M68000
 
             var result = changeBit(eaResult.Operand, bitNumber);
 
-            _memHelper.Write(result, eaResult.Address, eaResult.Location, operandSize);
+            if (updateDestValue)
+            {
+                _memHelper.Write(result, eaResult.Address, eaResult.Location, operandSize);
+            }
 
             return eaResult.InstructionSize;
         }
@@ -35,7 +38,7 @@ namespace CPEMUS.Motorola.M68000
         // Test Bit and Change.
         private int Bchg(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, (operand, bitNumber) =>
+            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
             {
                 return (uint)(operand ^ (1 << bitNumber));
             });
@@ -44,7 +47,7 @@ namespace CPEMUS.Motorola.M68000
         // Test Bit and Clear.
         private int Bclr(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, (operand, bitNumber) =>
+            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
             {
                 return (uint)(operand & ~(1 << bitNumber));
             });
@@ -53,15 +56,18 @@ namespace CPEMUS.Motorola.M68000
         // Test Bit and Set.
         private int Bset(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, (operand, bitNumber) =>
+            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
             {
                 return operand | (uint)(1 << bitNumber);
             });
         }
 
-        private int Btst(ushort opcode)
+        private int Btst(ushort opcode, bool srcImmediate)
         {
-            throw new NotImplementedException();
+            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: false, (operand, bitNumber) =>
+            {
+                return operand;
+            });
         }
     }
 }

@@ -2,8 +2,7 @@
 {
     public partial class M68K
     {
-        // Branch Conditionally.
-        private int Bcc(ushort opcode)
+        private (int instructionSize, int pcDisplacement) Branch(ushort opcode, Func<ushort, bool> branchRequired)
         {
             int instructionSize = INSTR_DEFAULT_SIZE;
             int displacement = (sbyte)opcode;
@@ -21,21 +20,48 @@
                 instructionSize += 2;
             }
 
-            if (NeedToBranch((ConditionTest)((opcode >> 8) & 0xF)))
+            if (branchRequired(opcode))
             {
-                return instructionSize + displacement;
+                return (instructionSize, instructionSize + displacement);
             }
-            return instructionSize;
+            return (instructionSize, instructionSize);
         }
 
+        // Branch Conditionally.
+        private int Bcc(ushort opcode)
+        {
+            (int _, int pcDisplacement) = Branch(opcode, (opcode) =>
+            {
+                return NeedToBranch((ConditionTest)((opcode >> 8) & 0xF));
+            });
+
+            return pcDisplacement;
+        }
+
+        // Branch Always.
         private int Bra(ushort opcode)
         {
-            throw new NotImplementedException();
+            (int _, int pcDisplacement) = Branch(opcode, (_) =>
+            {
+                return true;
+            });
+
+            return pcDisplacement;
         }
 
+        // Branch to Subroutine.
         private int Bsr(ushort opcode)
         {
-            throw new NotImplementedException();
+            (int instructionSize, int pcDisplacement) = Branch(opcode, (_) =>
+            {
+                return true;
+            });
+
+            // Pushing the address of the next instruction following bsr
+            // to stack.
+            PushStack((uint)(_regs.PC + instructionSize), OperandSize.Long);
+
+            return pcDisplacement;
         }
 
         private bool NeedToBranch(ConditionTest condition)

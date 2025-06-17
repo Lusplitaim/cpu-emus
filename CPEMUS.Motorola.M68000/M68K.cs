@@ -24,6 +24,8 @@ namespace CPEMUS.Motorola.M68000
         private const int BCLR_SFX_2 = 0x0880;
         private const int BSET_SFX_1 = 0x01C0;
         private const int BSET_SFX_2 = 0x08C0;
+        private const int BTST_SFX_1 = 0x0100;
+        private const int BTST_SFX_2 = 0x0800;
         #endregion
 
         #region Opcode masks.
@@ -31,7 +33,7 @@ namespace CPEMUS.Motorola.M68000
         private const int MULS_MASK = 0x01C0;
         private const int ABCD_MASK = 0x01F0;
         private const int EXG_MASK = 0x0130;
-        private const int ANDI_TO_CCR_MASK = 0x023C;
+        private const int ANDI_TO_CCR_MASK = 0xFFFF;
         private const int ANDI_MASK = 0xFF00;
         private const int ADDI_MASK = 0xFF00;
         private const int ADDA_MASK = 0xF1C0;
@@ -44,6 +46,8 @@ namespace CPEMUS.Motorola.M68000
         private const int BCLR_MASK_2 = 0xFFC0;
         private const int BSET_MASK_1 = 0xF1C0;
         private const int BSET_MASK_2 = 0xFFC0;
+        private const int BTST_MASK_1 = 0xF1C0;
+        private const int BTST_MASK_2 = 0xFFC0;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -193,6 +197,15 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Bset(opcode, srcImmediate: true);
             }
+
+            if ((opcode & BTST_MASK_1) == BTST_SFX_1)
+            {
+                return Btst(opcode, srcImmediate: false);
+            }
+            else if ((opcode & BTST_MASK_2) == BTST_SFX_2)
+            {
+                return Btst(opcode, srcImmediate: true);
+            }
             throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
@@ -212,6 +225,19 @@ namespace CPEMUS.Motorola.M68000
                 return Bsr(opcode);
             }
             return Bcc(opcode);
+        }
+
+        private void PushStack(uint value, OperandSize operandSize)
+        {
+            _regs.SP -= (uint)operandSize;
+            _memHelper.Write(value, _regs.SP, StoreLocation.Memory, operandSize);
+        }
+
+        private uint PopStack(OperandSize operandSize)
+        {
+            var result = _memHelper.Read(_regs.SP, StoreLocation.Memory, operandSize);
+            _regs.SP += (uint)operandSize;
+            return result;
         }
 
         private int Exg()

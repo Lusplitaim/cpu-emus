@@ -2,11 +2,11 @@
 {
     public class M68KRegs
     {
-        private readonly int CMask = 0x01;
-        private readonly int VMask = 0x02;
-        private readonly int ZMask = 0x04;
-        private readonly int NMask = 0x08;
-        private readonly int XMask = 0x10;
+        private const int CMask = 0x01;
+        private const int VMask = 0x02;
+        private const int ZMask = 0x04;
+        private const int NMask = 0x08;
+        private const int XMask = 0x10;
 
         // Data registers.
         public uint[] D = new uint[8];
