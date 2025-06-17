@@ -43,15 +43,15 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             return new(memTest, regs);
         }
 
-        public static bool Assert(M68K fact, M68K expected)
+        public static bool Assert(M68K actual, M68K expected)
         {
-            bool memIdentical = CompareMemory(fact.Memory, expected.Memory);
-            bool dataRegsIdentical = fact.Registers.D.SequenceEqual(expected.Registers.D);
-            bool addressRegsIdentical = fact.Registers.A.SequenceEqual(expected.Registers.A);
-            bool uspIdentical = fact.Registers.USP == expected.Registers.USP;
-            bool sspIdentical = fact.Registers.SSP == expected.Registers.SSP;
-            bool srIdentical = fact.Registers.SR == expected.Registers.SR;
-            bool pcIdentical = fact.Registers.PC == expected.Registers.PC;
+            bool memIdentical = CompareMemory(actual.Memory, expected.Memory);
+            bool dataRegsIdentical = actual.Registers.D.SequenceEqual(expected.Registers.D);
+            bool addressRegsIdentical = actual.Registers.A.SequenceEqual(expected.Registers.A);
+            bool uspIdentical = actual.Registers.USP == expected.Registers.USP;
+            bool sspIdentical = actual.Registers.SSP == expected.Registers.SSP;
+            bool srIdentical = actual.Registers.SR == expected.Registers.SR;
+            bool pcIdentical = actual.Registers.PC == expected.Registers.PC;
 
             return memIdentical && dataRegsIdentical && addressRegsIdentical
                 && uspIdentical && sspIdentical && srIdentical && pcIdentical;

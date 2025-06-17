@@ -26,6 +26,10 @@ namespace CPEMUS.Motorola.M68000
         private const int BSET_SFX_2 = 0x08C0;
         private const int BTST_SFX_1 = 0x0100;
         private const int BTST_SFX_2 = 0x0800;
+        private const int CLR_SFX = 0x4200;
+        private const int CMP_SFX = 0xB000;
+        private const int CMPA_SFX = 0xB0C0;
+        private const int CMPI_SFX = 0x0C00;
         #endregion
 
         #region Opcode masks.
@@ -48,6 +52,10 @@ namespace CPEMUS.Motorola.M68000
         private const int BSET_MASK_2 = 0xFFC0;
         private const int BTST_MASK_1 = 0xF1C0;
         private const int BTST_MASK_2 = 0xFFC0;
+        private const int CLR_MASK = 0xFF00;
+        private const int CMP_MASK = 0xF100;
+        private const int CMPA_MASK = 0xF0C0;
+        private const int CMPI_MASK = 0xFF00;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -103,13 +111,28 @@ namespace CPEMUS.Motorola.M68000
             return (opcode & 0xF000) switch
             {
                 0x0000 => Decode0x0(opcode),
+                0x4000 => Decode0x4(opcode),
                 0x5000 => Decode0x5(opcode),
                 0x6000 => Decode0x6(opcode),
+                0xB000 => Decode0xB(opcode),
                 0xC000 => Decode0xC(opcode),
                 0xD000 => Decode0xD(opcode),
                 0xE000 => Decode0xE(opcode),
                 _ => throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported"),
             };
+        }
+
+        private int Decode0xB(ushort opcode)
+        {
+            if ((opcode & CMP_MASK) == CMP_SFX)
+            {
+                return Cmp(opcode);
+            }
+            if ((opcode & CMPA_MASK) == CMPA_SFX)
+            {
+                return Cmpa(opcode);
+            }
+            throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
         private int Decode0xC(ushort opcode)
@@ -206,7 +229,21 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Btst(opcode, srcImmediate: true);
             }
+
+            if ((opcode & CMPI_MASK) == CMPI_SFX)
+            {
+                return Cmpi(opcode);
+            }
             throw new NotImplementedException("The operation is unknown or not implemented");
+        }
+
+        private int Decode0x4(ushort opcode)
+        {
+            if ((opcode & CLR_MASK) == CLR_SFX)
+            {
+                return Clr(opcode);
+            }
+            return Chk(opcode);
         }
 
         private int Decode0x5(ushort opcode)
@@ -229,14 +266,14 @@ namespace CPEMUS.Motorola.M68000
 
         private void PushStack(uint value, OperandSize operandSize)
         {
-            _regs.SP -= (uint)operandSize;
+            _regs.SP -= Math.Max((uint)operandSize, (uint)OperandSize.Word);
             _memHelper.Write(value, _regs.SP, StoreLocation.Memory, operandSize);
         }
 
         private uint PopStack(OperandSize operandSize)
         {
             var result = _memHelper.Read(_regs.SP, StoreLocation.Memory, operandSize);
-            _regs.SP += (uint)operandSize;
+            _regs.SP += Math.Max((uint)operandSize, (uint)OperandSize.Word);
             return result;
         }
 

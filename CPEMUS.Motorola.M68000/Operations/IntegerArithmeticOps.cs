@@ -1,4 +1,5 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
+using System.Reflection.Emit;
 
 namespace CPEMUS.Motorola.M68000
 {
@@ -161,6 +162,97 @@ namespace CPEMUS.Motorola.M68000
         }
 
         private int Muls()
+        {
+            throw new NotImplementedException();
+        }
+
+        // Clear an Operand.
+        private int Clr(ushort opcode)
+        {
+            _regs.N = false;
+            _regs.Z = true;
+            _regs.V = false;
+            _regs.C = false;
+
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+
+            _memHelper.Write(0, eaProps.Address, eaProps.Location, operandSize);
+
+            return eaProps.InstructionSize;
+        }
+
+        private void Compare(uint dest, uint src, OperandSize operandSize)
+        {
+            var result = dest - src;
+
+            _flagsHelper.AlterN(result, operandSize);
+            _flagsHelper.AlterZ(result, operandSize);
+            _flagsHelper.AlterV(dest, src, result, operandSize);
+            _flagsHelper.AlterC(result, operandSize);
+        }
+
+        // Compare.
+        private int Cmp(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            var dataRegIdx = (uint)((opcode >> 9) & 0x7);
+            var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+
+            Compare(dataReg, eaProps.Operand, operandSize);
+
+            return eaProps.InstructionSize;
+        }
+
+        // Compare Address.
+        private int Cmpa(ushort opcode)
+        {
+            OperandSize operandSize;
+            switch ((opcode >> 6) & 0x7)
+            {
+                case 0x3:
+                    operandSize = OperandSize.Word;
+                    break;
+                case 0x7:
+                    operandSize = OperandSize.Long;
+                    break;
+                default:
+                    throw new InvalidOperationException("The given operation size is unknown.");
+
+            }
+
+            var addrRegIdx = (uint)((opcode >> 9) & 0x7);
+            // The entire destination address register is used regardless of the operation size.
+            var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize, signExtended: true);
+
+            Compare(addrReg, eaProps.Operand, operandSize);
+
+            return eaProps.InstructionSize;
+        }
+
+        // Compare Immediate.
+        private int Cmpi(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            var immediateOperand = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, operandSize);
+
+            var opcodeSize = INSTR_DEFAULT_SIZE + (operandSize == OperandSize.Byte ? 2 : (int)operandSize);
+            var eaProps = _eaHelper.Get(opcode, operandSize, opcodeSize);
+
+            Compare(eaProps.Operand, (uint)immediateOperand, operandSize);
+
+            return eaProps.InstructionSize;
+        }
+
+
+        // Compare Memory.
+        private int Cmpm(ushort opcode)
         {
             throw new NotImplementedException();
         }

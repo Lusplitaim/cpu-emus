@@ -5,10 +5,10 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
     internal class MemTest : IList<byte>
     {
         private readonly IList<byte> _mem;
-        private readonly Dictionary<int, int> _memMapper;
+        private readonly SortedDictionary<int, int> _memMapper;
         public MemTest(List<List<uint>> ram)
         {
-            _mem = new byte[ram.Count];
+            _mem = new List<byte>();
 
             _memMapper = new();
             ram.Sort((e1, e2) =>
@@ -31,7 +31,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
                 var ramAddress = ram[i][0];
                 _memMapper.Add((int)ramAddress, i);
                 var ramValue = (byte)ram[i][1];
-                _mem[i] = ramValue;
+                _mem.Add(ramValue);
             }
         }
 
@@ -49,7 +49,9 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             {
                 if (!_memMapper.TryGetValue(index, out int addr))
                 {
-                    throw new IndexOutOfRangeException();
+                    _memMapper.Add(index, _mem.Count);
+                    _mem.Add(value);
+                    return;
                 }
                 _mem[addr] = value;
             }
