@@ -4,16 +4,16 @@ namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        private int Bchg(ushort opcode, bool srcImmediate)
+        private int TestAndChangeBit(ushort opcode, bool srcImmediate, Func<uint, int, uint> changeBit)
         {
             var mode = (EAMode)((opcode >> 3) & 0x7);
             var operandSize = mode == EAMode.DataDirect ? OperandSize.Long : OperandSize.Byte;
             var opcodeSize = srcImmediate ? 4 : 2;
-            
+
             int bitNumber;
             if (srcImmediate)
             {
-                bitNumber = (byte)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word) % ((int)operandSize * 8);
+                bitNumber = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word) % ((int)operandSize * 8);
             }
             else
             {
@@ -25,21 +25,38 @@ namespace CPEMUS.Motorola.M68000
 
             _flagsHelper.AlterZ((eaResult.Operand >> bitNumber) & 0x1, OperandSize.Byte);
 
-            var result = (uint)(eaResult.Operand ^ (1 << bitNumber));
+            var result = changeBit(eaResult.Operand, bitNumber);
 
             _memHelper.Write(result, eaResult.Address, eaResult.Location, operandSize);
 
             return eaResult.InstructionSize;
         }
 
-        private int Bclr(ushort opcode)
+        // Test Bit and Change.
+        private int Bchg(ushort opcode, bool srcImmediate)
         {
-            throw new NotImplementedException();
+            return TestAndChangeBit(opcode, srcImmediate, (operand, bitNumber) =>
+            {
+                return (uint)(operand ^ (1 << bitNumber));
+            });
         }
 
-        private int Bset(ushort opcode)
+        // Test Bit and Clear.
+        private int Bclr(ushort opcode, bool srcImmediate)
         {
-            throw new NotImplementedException();
+            return TestAndChangeBit(opcode, srcImmediate, (operand, bitNumber) =>
+            {
+                return (uint)(operand & ~(1 << bitNumber));
+            });
+        }
+
+        // Test Bit and Set.
+        private int Bset(ushort opcode, bool srcImmediate)
+        {
+            return TestAndChangeBit(opcode, srcImmediate, (operand, bitNumber) =>
+            {
+                return operand | (uint)(1 << bitNumber);
+            });
         }
 
         private int Btst(ushort opcode)

@@ -20,6 +20,10 @@ namespace CPEMUS.Motorola.M68000
         private const int BSR_SFX = 0x6100;
         private const int BCHG_SFX_1 = 0x0140;
         private const int BCHG_SFX_2 = 0x0840;
+        private const int BCLR_SFX_1 = 0x0180;
+        private const int BCLR_SFX_2 = 0x0880;
+        private const int BSET_SFX_1 = 0x01C0;
+        private const int BSET_SFX_2 = 0x08C0;
         #endregion
 
         #region Opcode masks.
@@ -36,6 +40,10 @@ namespace CPEMUS.Motorola.M68000
         private const int BSR_MASK = 0xFF00;
         private const int BCHG_MASK_1 = 0xF1C0;
         private const int BCHG_MASK_2 = 0xFFC0;
+        private const int BCLR_MASK_1 = 0xF1C0;
+        private const int BCLR_MASK_2 = 0xFFC0;
+        private const int BSET_MASK_1 = 0xF1C0;
+        private const int BSET_MASK_2 = 0xFFC0;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -158,13 +166,32 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Andi(opcode);
             }
+
             if ((opcode & BCHG_MASK_1) == BCHG_SFX_1)
             {
                 return Bchg(opcode, srcImmediate: false);
             }
-            if ((opcode & BCHG_MASK_2) == BCHG_SFX_2)
+            else if ((opcode & BCHG_MASK_2) == BCHG_SFX_2)
             {
                 return Bchg(opcode, srcImmediate: true);
+            }
+
+            if ((opcode & BCLR_MASK_1) == BCLR_SFX_1)
+            {
+                return Bclr(opcode, srcImmediate: false);
+            }
+            else if ((opcode & BCLR_MASK_2) == BCLR_SFX_2)
+            {
+                return Bclr(opcode, srcImmediate: true);
+            }
+
+            if ((opcode & BSET_MASK_1) == BSET_SFX_1)
+            {
+                return Bset(opcode, srcImmediate: false);
+            }
+            else if ((opcode & BSET_MASK_2) == BSET_SFX_2)
+            {
+                return Bset(opcode, srcImmediate: true);
             }
             throw new NotImplementedException("The operation is unknown or not implemented");
         }
