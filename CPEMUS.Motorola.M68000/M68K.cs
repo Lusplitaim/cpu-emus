@@ -30,6 +30,7 @@ namespace CPEMUS.Motorola.M68000
         private const int CMP_SFX = 0xB000;
         private const int CMPA_SFX = 0xB0C0;
         private const int CMPI_SFX = 0x0C00;
+        private const int CMPM_SFX = 0xB108;
         #endregion
 
         #region Opcode masks.
@@ -56,6 +57,7 @@ namespace CPEMUS.Motorola.M68000
         private const int CMP_MASK = 0xF100;
         private const int CMPA_MASK = 0xF0C0;
         private const int CMPI_MASK = 0xFF00;
+        private const int CMPM_MASK = 0xF138;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -131,6 +133,10 @@ namespace CPEMUS.Motorola.M68000
             if ((opcode & CMPA_MASK) == CMPA_SFX)
             {
                 return Cmpa(opcode);
+            }
+            if ((opcode & CMPM_MASK) == CMPM_SFX)
+            {
+                return Cmpm(opcode);
             }
             throw new NotImplementedException("The operation is unknown or not implemented");
         }

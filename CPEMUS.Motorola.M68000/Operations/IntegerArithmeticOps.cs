@@ -188,7 +188,7 @@ namespace CPEMUS.Motorola.M68000
 
             _flagsHelper.AlterN(result, operandSize);
             _flagsHelper.AlterZ(result, operandSize);
-            _flagsHelper.AlterV(dest, src, result, operandSize);
+            _flagsHelper.AlterV(dest, src, (int)result, operandSize);
             _flagsHelper.AlterC(result, operandSize);
         }
 
@@ -254,7 +254,17 @@ namespace CPEMUS.Motorola.M68000
         // Compare Memory.
         private int Cmpm(ushort opcode)
         {
-            throw new NotImplementedException();
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            var destOperandIdx = (uint)(opcode & 0x7);
+            var destOperand = _memHelper.Read(destOperandIdx, StoreLocation.AddressRegister, operandSize);
+
+            var srcOperandIdx = (uint)((opcode >> 9) & 0x7);
+            var srcOperand = _memHelper.Read(srcOperandIdx, StoreLocation.AddressRegister, operandSize);
+
+            Compare(destOperand, srcOperand, operandSize);
+
+            return INSTR_DEFAULT_SIZE;
         }
     }
 }
