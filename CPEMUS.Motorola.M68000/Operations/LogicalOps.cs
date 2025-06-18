@@ -1,6 +1,4 @@
-﻿using System.Reflection.Emit;
-
-namespace CPEMUS.Motorola.M68000
+﻿namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {

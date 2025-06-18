@@ -77,7 +77,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 StoreLocation.AddressRegister => address == SP_ADDRESS
                     ? Read(_regs.SP, operandSize)
                     : Read(_regs.A[address], operandSize),
-                StoreLocation.Memory => _mem.Read(address, operandSize),
+                StoreLocation.Memory => _mem.Read(address & 0xFFFFFF, operandSize),
                 _ => throw new InvalidOperationException("Operand location type is unknown"),
             };
 

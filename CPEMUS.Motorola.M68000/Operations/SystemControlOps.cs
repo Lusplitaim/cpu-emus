@@ -6,5 +6,11 @@
         {
             throw new NotImplementedException();
         }
+
+        // Take Illegal Instruction Trap.
+        private int Illegal(ushort opcode)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

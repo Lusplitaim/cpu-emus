@@ -39,6 +39,11 @@ namespace CPEMUS.Motorola.M68000
         private const int EORI_TO_CCR_SFX = 0x0A3C;
         private const int EXT_SFX = 0x4800;
         private const int CHK_SFX = 0x4000;
+        private const int ILLEGAL_SFX = 0x4AFC;
+        private const int JMP_SFX = 0x4EC0;
+        private const int JSR_SFX = 0x4E80;
+        private const int LEA_SFX = 0x41C0;
+        private const int LINK_SFX = 0x4E50;
         #endregion
 
         #region Opcode masks.
@@ -74,6 +79,11 @@ namespace CPEMUS.Motorola.M68000
         private const int EORI_TO_CCR_MASK = 0xFFFF;
         private const int EXT_MASK = 0xFE38;
         private const int CHK_MASK = 0xF040;
+        private const int ILLEGAL_MASK = 0xFFFF;
+        private const int JMP_MASK = 0xFFC0;
+        private const int JSR_MASK = 0xFFC0;
+        private const int LEA_MASK = 0xF1C0;
+        private const int LINK_MASK = 0xFFF8;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -285,6 +295,26 @@ namespace CPEMUS.Motorola.M68000
             if ((opcode & CHK_MASK) == CHK_SFX)
             {
                 return Chk(opcode);
+            }
+            if ((opcode & ILLEGAL_MASK) == ILLEGAL_SFX)
+            {
+                return Illegal(opcode);
+            }
+            if ((opcode & JMP_MASK) == JMP_SFX)
+            {
+                return Jmp(opcode);
+            }
+            if ((opcode & JSR_MASK) == JSR_SFX)
+            {
+                return Jsr(opcode);
+            }
+            if ((opcode & LEA_MASK) == LEA_SFX)
+            {
+                return Lea(opcode);
+            }
+            if ((opcode & LINK_MASK) == LINK_SFX)
+            {
+                return Link(opcode);
             }
             throw new NotImplementedException("The operation is unknown or not implemented");
         }

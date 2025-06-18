@@ -118,6 +118,21 @@
                 _ => throw new InvalidOperationException("Condition test is unknown or not supported"),
             };
         }
+
+        // Jump.
+        private int Jmp(ushort opcode)
+        {
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
+            _regs.PC = eaProps.Address;
+            return 0;
+        }
+
+        // Jump to Subroutine.
+        private int Jsr(ushort opcode)
+        {
+            PushStack(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Long);
+            return Jmp(opcode);
+        }
     }
 
     internal enum BranchCondition
