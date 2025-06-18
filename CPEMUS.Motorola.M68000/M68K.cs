@@ -9,7 +9,7 @@ namespace CPEMUS.Motorola.M68000
         private const int MULU_SFX = 0x00C0;
         private const int MULS_SFX = 0x01C0;
         private const int ABCD_SFX = 0x0100;
-        private const int EXG_SFX = 0x0100;
+        private const int EXG_SFX = 0xC100;
         private const int ANDI_TO_CCR_SFX = 0x023C;
         private const int ANDI_SFX = 0x0200;
         private const int ADDI_SFX = 0x0600;
@@ -31,13 +31,21 @@ namespace CPEMUS.Motorola.M68000
         private const int CMPA_SFX = 0xB0C0;
         private const int CMPI_SFX = 0x0C00;
         private const int CMPM_SFX = 0xB108;
+        private const int DBCC_SFX = 0x50C8;
+        private const int DIVS_SFX = 0x81C0;
+        private const int DIVU_SFX = 0x80C0;
+        private const int EOR_SFX = 0xB100;
+        private const int EORI_SFX = 0x0A00;
+        private const int EORI_TO_CCR_SFX = 0x0A3C;
+        private const int EXT_SFX = 0x4800;
+        private const int CHK_SFX = 0x4000;
         #endregion
 
         #region Opcode masks.
         private const int MULU_MASK = 0x01C0;
         private const int MULS_MASK = 0x01C0;
         private const int ABCD_MASK = 0x01F0;
-        private const int EXG_MASK = 0x0130;
+        private const int EXG_MASK = 0xF130;
         private const int ANDI_TO_CCR_MASK = 0xFFFF;
         private const int ANDI_MASK = 0xFF00;
         private const int ADDI_MASK = 0xFF00;
@@ -58,6 +66,14 @@ namespace CPEMUS.Motorola.M68000
         private const int CMPA_MASK = 0xF0C0;
         private const int CMPI_MASK = 0xFF00;
         private const int CMPM_MASK = 0xF138;
+        private const int DBCC_MASK = 0xF0F8;
+        private const int DIVS_MASK = 0xF1C0;
+        private const int DIVU_MASK = 0xF1C0;
+        private const int EOR_MASK = 0xF100;
+        private const int EORI_MASK = 0xFF00;
+        private const int EORI_TO_CCR_MASK = 0xFFFF;
+        private const int EXT_MASK = 0xFE38;
+        private const int CHK_MASK = 0xF040;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -116,6 +132,7 @@ namespace CPEMUS.Motorola.M68000
                 0x4000 => Decode0x4(opcode),
                 0x5000 => Decode0x5(opcode),
                 0x6000 => Decode0x6(opcode),
+                0x8000 => Decode0x8(opcode),
                 0xB000 => Decode0xB(opcode),
                 0xC000 => Decode0xC(opcode),
                 0xD000 => Decode0xD(opcode),
@@ -138,6 +155,10 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Cmpm(opcode);
             }
+            if ((opcode & EOR_MASK) == EOR_SFX)
+            {
+                return Eor(opcode);
+            }
             throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
@@ -157,7 +178,7 @@ namespace CPEMUS.Motorola.M68000
             }
             else if ((opcode & EXG_MASK) == EXG_SFX)
             {
-                return Exg();
+                return Exg(opcode);
             }
             else
             {
@@ -190,6 +211,14 @@ namespace CPEMUS.Motorola.M68000
             if ((opcode & ANDI_TO_CCR_MASK) == ANDI_TO_CCR_SFX)
             {
                 return AndiToCcr(opcode);
+            }
+            if ((opcode & EORI_TO_CCR_MASK) == EORI_TO_CCR_SFX)
+            {
+                return EoriToCcr(opcode);
+            }
+            if ((opcode & EORI_MASK) == EORI_SFX)
+            {
+                return Eori(opcode);
             }
             if ((opcode & ADDI_MASK) == ADDI_SFX)
             {
@@ -249,11 +278,23 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Clr(opcode);
             }
-            return Chk(opcode);
+            if ((opcode & EXT_MASK) == EXT_SFX)
+            {
+                return Ext(opcode);
+            }
+            if ((opcode & CHK_MASK) == CHK_SFX)
+            {
+                return Chk(opcode);
+            }
+            throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
         private int Decode0x5(ushort opcode)
         {
+            if ((opcode & DBCC_MASK) == DBCC_SFX)
+            {
+                return Dbcc(opcode);
+            }
             return Addq(opcode);
         }
 
@@ -270,6 +311,19 @@ namespace CPEMUS.Motorola.M68000
             return Bcc(opcode);
         }
 
+        private int Decode0x8(ushort opcode)
+        {
+            if ((opcode & DIVS_MASK) == DIVS_SFX)
+            {
+                return Divs(opcode);
+            }
+            if ((opcode & DIVU_MASK) == DIVU_SFX)
+            {
+                return Divu(opcode);
+            }
+            throw new NotImplementedException("The operation is unknown or not implemented");
+        }
+
         private void PushStack(uint value, OperandSize operandSize)
         {
             _regs.SP -= Math.Max((uint)operandSize, (uint)OperandSize.Word);
@@ -281,11 +335,6 @@ namespace CPEMUS.Motorola.M68000
             var result = _memHelper.Read(_regs.SP, StoreLocation.Memory, operandSize);
             _regs.SP += Math.Max((uint)operandSize, (uint)OperandSize.Word);
             return result;
-        }
-
-        private int Exg()
-        {
-            throw new NotImplementedException();
         }
 
         private int And(ushort opcode)

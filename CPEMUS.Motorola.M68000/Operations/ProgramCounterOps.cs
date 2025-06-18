@@ -2,15 +2,10 @@
 {
     public partial class M68K
     {
-        private (int instructionSize, int pcDisplacement) Branch(ushort opcode, Func<ushort, bool> branchRequired)
+        private (int instructionSize, int pcDisplacement) BranchWithInternalDisplacement(ushort opcode, Func<ushort, bool> branchRequired)
         {
             int instructionSize = INSTR_DEFAULT_SIZE;
             int displacement = (sbyte)opcode;
-
-            if ((byte)displacement == 0xFF)
-            {
-                throw new InvalidOperationException("Displacement contained in a long word is not supported");
-            }
 
             // If internal displacement is zero, take displacement
             // from immediate word next to the opcode.
@@ -30,9 +25,14 @@
         // Branch Conditionally.
         private int Bcc(ushort opcode)
         {
-            (int _, int pcDisplacement) = Branch(opcode, (opcode) =>
+            (int _, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (opcode) =>
             {
-                return NeedToBranch((ConditionTest)((opcode >> 8) & 0xF));
+                var condition = (BranchCondition)((opcode >> 8) & 0xF);
+                if (condition == BranchCondition.True || condition == BranchCondition.False)
+                {
+                    throw new InvalidOperationException("The branch condition is not allowed for Bcc instruction");
+                }
+                return TestBranchCondition(condition);
             });
 
             return pcDisplacement;
@@ -41,7 +41,7 @@
         // Branch Always.
         private int Bra(ushort opcode)
         {
-            (int _, int pcDisplacement) = Branch(opcode, (_) =>
+            (int _, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (_) =>
             {
                 return true;
             });
@@ -52,7 +52,7 @@
         // Branch to Subroutine.
         private int Bsr(ushort opcode)
         {
-            (int instructionSize, int pcDisplacement) = Branch(opcode, (_) =>
+            (int instructionSize, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (_) =>
             {
                 return true;
             });
@@ -64,7 +64,33 @@
             return pcDisplacement;
         }
 
-        private bool NeedToBranch(ConditionTest condition)
+        // Test Condition, Decrement, and Branch.
+        private int Dbcc(ushort opcode)
+        {
+            var instructionSize = INSTR_DEFAULT_SIZE + 2;
+
+            var condition = (BranchCondition)((opcode >> 8) & 0xF);
+            if (TestBranchCondition(condition))
+            {
+                return instructionSize;
+            }
+
+            var operandSize = OperandSize.Word;
+            uint dataRegIdx = (uint)(opcode & 0x7);
+            var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
+
+            dataReg--;
+            _memHelper.Write(dataReg, dataRegIdx, StoreLocation.DataRegister, operandSize);
+            if ((short)dataReg == -1)
+            {
+                return instructionSize;
+            }
+
+            var displacement = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, operandSize, signExtended: true);
+            return instructionSize + displacement;
+        }
+
+        private bool TestBranchCondition(BranchCondition condition)
         {
             bool carry = _regs.C;
             bool extended = _regs.X;
@@ -73,27 +99,31 @@
             bool zero = _regs.Z;
             return condition switch
             {
-                ConditionTest.High => !carry && !zero,
-                ConditionTest.LowOrSame => carry || zero,
-                ConditionTest.CarryClear => !carry,
-                ConditionTest.CarrySet => carry,
-                ConditionTest.NotEqual => !zero,
-                ConditionTest.Equal => zero,
-                ConditionTest.OverflowClear => !overflow,
-                ConditionTest.OverflowSet => overflow,
-                ConditionTest.Plus => !negative,
-                ConditionTest.Minus => negative,
-                ConditionTest.GreaterOrEqual => negative == overflow,
-                ConditionTest.LessThan => negative != overflow,
-                ConditionTest.GreaterThan => negative = overflow && !zero,
-                ConditionTest.LessOrEqual => zero || negative != overflow,
+                BranchCondition.True => true,
+                BranchCondition.False => false,
+                BranchCondition.High => !carry && !zero,
+                BranchCondition.LowOrSame => carry || zero,
+                BranchCondition.CarryClear => !carry,
+                BranchCondition.CarrySet => carry,
+                BranchCondition.NotEqual => !zero,
+                BranchCondition.Equal => zero,
+                BranchCondition.OverflowClear => !overflow,
+                BranchCondition.OverflowSet => overflow,
+                BranchCondition.Plus => !negative,
+                BranchCondition.Minus => negative,
+                BranchCondition.GreaterOrEqual => negative == overflow,
+                BranchCondition.LessThan => negative != overflow,
+                BranchCondition.GreaterThan => negative = overflow && !zero,
+                BranchCondition.LessOrEqual => zero || negative != overflow,
                 _ => throw new InvalidOperationException("Condition test is unknown or not supported"),
             };
         }
     }
 
-    internal enum ConditionTest
+    internal enum BranchCondition
     {
+        True = 0x0,
+        False = 0x1,
         High = 0x2,
         LowOrSame = 0x3,
         CarryClear = 0x4,

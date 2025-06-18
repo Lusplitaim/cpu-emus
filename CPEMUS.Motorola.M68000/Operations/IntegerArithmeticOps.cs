@@ -266,5 +266,95 @@ namespace CPEMUS.Motorola.M68000
 
             return INSTR_DEFAULT_SIZE;
         }
+
+        // Signed Divide.
+        private int Divs(ushort opcode)
+        {
+            uint dataRegIdx = (uint)((opcode >> 9) & 0x7);
+            int dividend = (int)_memHelper.Read(dataRegIdx, StoreLocation.DataRegister, OperandSize.Long, signExtended: true);
+
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Word, signExtended: true);
+            int divisor = (int)eaProps.Operand;
+            if (divisor == 0)
+            {
+                throw new InvalidOperationException("Divisor cannot be zero");
+            }
+
+            int quotient = dividend / divisor;
+            int remainder = dividend % divisor;
+            int result = (remainder << 16) | quotient;
+
+            _regs.V = quotient > 0xFFFF;
+
+            if (_regs.V)
+            {
+                _flagsHelper.AlterN((uint)quotient, OperandSize.Long);
+                _flagsHelper.AlterZ((uint)quotient, OperandSize.Long);
+                _regs.C = false;
+
+                _memHelper.Write((uint)result, dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
+            }
+
+            return eaProps.InstructionSize;
+        }
+
+        // Unsigned Divide.
+        private int Divu(ushort opcode)
+        {
+            uint dataRegIdx = (uint)((opcode >> 9) & 0x7);
+            uint dividend = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
+
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
+            uint divisor = eaProps.Operand;
+            if (divisor == 0)
+            {
+                throw new InvalidOperationException("Divisor cannot be zero");
+            }
+
+            uint quotient = dividend / divisor;
+            uint remainder = dividend % divisor;
+            uint result = (remainder << 16) | quotient;
+
+            _regs.V = quotient > 0xFFFF;
+
+            if (_regs.V)
+            {
+                _flagsHelper.AlterN(quotient, OperandSize.Long);
+                _flagsHelper.AlterZ(quotient, OperandSize.Long);
+                _regs.C = false;
+
+                _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
+            }
+
+            return eaProps.InstructionSize;
+        }
+
+        // Sign-Extend.
+        private int Ext(ushort opcode)
+        {
+            OperandSize regSize;
+            OperandSize extSize;
+
+            var mode = (opcode >> 6) & 0x7;
+            switch (mode)
+            {
+                case 2:
+                    regSize = OperandSize.Byte;
+                    extSize = OperandSize.Word;
+                    break;
+                case 3:
+                    regSize = OperandSize.Word;
+                    extSize = OperandSize.Long;
+                    break;
+                default:
+                    throw new InvalidOperationException();
+            }
+
+            var regIdx = (uint)(opcode & 0x7);
+            var reg = _memHelper.Read(regIdx, StoreLocation.DataRegister, regSize, signExtended: true);
+            _memHelper.Write(reg, regIdx, StoreLocation.DataRegister, extSize);
+
+            return INSTR_DEFAULT_SIZE;
+        }
     }
 }
