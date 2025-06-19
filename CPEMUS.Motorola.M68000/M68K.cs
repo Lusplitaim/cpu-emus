@@ -44,6 +44,8 @@ namespace CPEMUS.Motorola.M68000
         private const int JSR_SFX = 0x4E80;
         private const int LEA_SFX = 0x41C0;
         private const int LINK_SFX = 0x4E50;
+        private const int LSL_LSR_REG_SFX = 0xE008;
+        private const int LSL_LSR_MEM_SFX = 0xE2C0;
         #endregion
 
         #region Opcode masks.
@@ -84,6 +86,8 @@ namespace CPEMUS.Motorola.M68000
         private const int JSR_MASK = 0xFFC0;
         private const int LEA_MASK = 0xF1C0;
         private const int LINK_MASK = 0xFFF8;
+        private const int LSL_LSR_REG_MASK = 0xF018;
+        private const int LSL_LSR_MEM_MASK = 0xFEC0;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -213,7 +217,15 @@ namespace CPEMUS.Motorola.M68000
             {
                 return AslAsr(opcode);
             }
-            return AslAsr(opcode);
+            if ((opcode & LSL_LSR_REG_MASK) == LSL_LSR_REG_SFX)
+            {
+                return LslLsrRegShift(opcode);
+            }
+            if ((opcode & LSL_LSR_MEM_MASK) == LSL_LSR_MEM_SFX)
+            {
+                return LslLsrMemShift(opcode);
+            }
+            throw new NotImplementedException();
         }
 
         private int Decode0x0(ushort opcode)
