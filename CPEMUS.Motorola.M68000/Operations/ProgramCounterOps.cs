@@ -27,12 +27,12 @@
         {
             (int _, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (opcode) =>
             {
-                var condition = (BranchCondition)((opcode >> 8) & 0xF);
-                if (condition == BranchCondition.True || condition == BranchCondition.False)
+                var condition = (ConditionCode)((opcode >> 8) & 0xF);
+                if (condition == ConditionCode.True || condition == ConditionCode.False)
                 {
                     throw new InvalidOperationException("The branch condition is not allowed for Bcc instruction");
                 }
-                return TestBranchCondition(condition);
+                return TestCondition(condition);
             });
 
             return pcDisplacement;
@@ -69,8 +69,8 @@
         {
             var instructionSize = INSTR_DEFAULT_SIZE + 2;
 
-            var condition = (BranchCondition)((opcode >> 8) & 0xF);
-            if (TestBranchCondition(condition))
+            var condition = (ConditionCode)((opcode >> 8) & 0xF);
+            if (TestCondition(condition))
             {
                 return instructionSize;
             }
@@ -90,7 +90,19 @@
             return instructionSize + displacement;
         }
 
-        private bool TestBranchCondition(BranchCondition condition)
+        // Set According to Condition.
+        private int Scc(ushort opcode)
+        {
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Byte);
+
+            var condition = (ConditionCode)((opcode >> 8) & 0xF);
+            int result = TestCondition(condition) ? -1 : 0;
+            _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, OperandSize.Byte);
+
+            return eaProps.InstructionSize;
+        }
+
+        private bool TestCondition(ConditionCode condition)
         {
             bool carry = _regs.C;
             bool extended = _regs.X;
@@ -99,22 +111,22 @@
             bool zero = _regs.Z;
             return condition switch
             {
-                BranchCondition.True => true,
-                BranchCondition.False => false,
-                BranchCondition.High => !carry && !zero,
-                BranchCondition.LowOrSame => carry || zero,
-                BranchCondition.CarryClear => !carry,
-                BranchCondition.CarrySet => carry,
-                BranchCondition.NotEqual => !zero,
-                BranchCondition.Equal => zero,
-                BranchCondition.OverflowClear => !overflow,
-                BranchCondition.OverflowSet => overflow,
-                BranchCondition.Plus => !negative,
-                BranchCondition.Minus => negative,
-                BranchCondition.GreaterOrEqual => negative == overflow,
-                BranchCondition.LessThan => negative != overflow,
-                BranchCondition.GreaterThan => negative = overflow && !zero,
-                BranchCondition.LessOrEqual => zero || negative != overflow,
+                ConditionCode.True => true,
+                ConditionCode.False => false,
+                ConditionCode.High => !carry && !zero,
+                ConditionCode.LowOrSame => carry || zero,
+                ConditionCode.CarryClear => !carry,
+                ConditionCode.CarrySet => carry,
+                ConditionCode.NotEqual => !zero,
+                ConditionCode.Equal => zero,
+                ConditionCode.OverflowClear => !overflow,
+                ConditionCode.OverflowSet => overflow,
+                ConditionCode.Plus => !negative,
+                ConditionCode.Minus => negative,
+                ConditionCode.GreaterOrEqual => negative == overflow,
+                ConditionCode.LessThan => negative != overflow,
+                ConditionCode.GreaterThan => negative = overflow && !zero,
+                ConditionCode.LessOrEqual => zero || negative != overflow,
                 _ => throw new InvalidOperationException("Condition test is unknown or not supported"),
             };
         }
@@ -133,9 +145,36 @@
             PushStack(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Long);
             return Jmp(opcode);
         }
+
+        // No Operation.
+        private int Nop(ushort opcode)
+        {
+            return INSTR_DEFAULT_SIZE;
+        }
+
+        // Return and Restore Condition Codes.
+        private int Rtr(ushort opcode)
+        {
+            var sr = PopStack(OperandSize.Word);
+            _regs.CCR = (byte)sr;
+
+            var pc = PopStack(OperandSize.Long);
+            _regs.PC = pc;
+
+            return 0;
+        }
+
+        // Return from Subroutine.
+        private int Rts(ushort opcode)
+        {
+            var pc = PopStack(OperandSize.Long);
+            _regs.PC = pc;
+
+            return 0;
+        }
     }
 
-    internal enum BranchCondition
+    internal enum ConditionCode
     {
         True = 0x0,
         False = 0x1,

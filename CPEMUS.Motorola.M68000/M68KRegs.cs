@@ -51,9 +51,16 @@
         public uint PC { get; set; }
 
         // Status Register.
+        public ushort SR;
+
+        // Condition Code Register.
         // Upper byte is read as all zeroes
         // and is ignored when written.
-        public ushort SR;
+        public byte CCR
+        {
+            get => (byte)SR;
+            set => SR = (ushort)((SR & 0xFF00) | value);
+        }
 
         #region Flags.
         public bool X
