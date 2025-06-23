@@ -54,7 +54,7 @@ namespace CPEMUS.Motorola.M68000
         private int Pea(ushort opcode)
         {
             var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
-            PushStack(eaProps.Address, OperandSize.Long);
+            _memHelper.PushStack(eaProps.Address, OperandSize.Long);
             return INSTR_DEFAULT_SIZE;
         }
 
@@ -63,7 +63,7 @@ namespace CPEMUS.Motorola.M68000
         {
             var addrRegIdx = (uint)((opcode >> 9) & 0x7);
             var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
-            PushStack(addrReg, OperandSize.Long);
+            _memHelper.PushStack(addrReg, OperandSize.Long);
 
             _memHelper.Write(_regs.SP, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
@@ -71,6 +71,20 @@ namespace CPEMUS.Motorola.M68000
             _regs.SP = (uint)(_regs.SP + displacement);
 
             return INSTR_DEFAULT_SIZE + 2;
+        }
+
+        // Unlink.
+        private int Unlk(ushort opcode)
+        {
+            var addrRegIdx = (uint)(opcode & 0x7);
+            var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
+
+            _regs.SP = addrReg;
+            var newAddrRegValue = _memHelper.PopStack(OperandSize.Long);
+
+            _memHelper.Write(newAddrRegValue, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
+
+            return INSTR_DEFAULT_SIZE;
         }
 
         // Move Data from Source to Destination.

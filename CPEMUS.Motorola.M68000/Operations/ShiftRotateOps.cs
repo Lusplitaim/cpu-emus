@@ -4,14 +4,7 @@ namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        // Arithmetic Shift Right/Left.
-        private int AslAsr(ushort opcode)
-        {
-            throw new NotImplementedException();
-        }
-
-        // Arithmetic Shift Left/Right, Register Shift.
-        private int LslLsrRegShift(ushort opcode)
+        private int LogicalArithmeticRegShift(ushort opcode, Func<uint, int, bool, OperandSize, uint> getShiftResult)
         {
             var count = (opcode >> 9) & 0x7;
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
@@ -30,45 +23,117 @@ namespace CPEMUS.Motorola.M68000
             var valueForShift = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
 
             bool isShiftLeft = ((opcode >> 8) & 0x1) == 1;
-            var result = GetLogicalShiftResult(valueForShift, count, isShiftLeft, operandSize);
+            var result = getShiftResult(valueForShift, count, isShiftLeft, operandSize);
 
             _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, operandSize);
 
             return INSTR_DEFAULT_SIZE;
         }
 
-        // Arithmetic Shift Left/Right, Memory Shift.
-        private int LslLsrMemShift(ushort opcode)
+        private int LogicalArithmeticMemShift(ushort opcode, Func<uint, int, bool, OperandSize, uint> getShiftResult)
         {
             bool isShiftLeft = ((opcode >> 8) & 0x1) == 1;
             var operandSize = OperandSize.Word;
             var eaProps = _eaHelper.Get(opcode, operandSize);
 
-            var result = GetLogicalShiftResult(eaProps.Operand, 1, isShiftLeft, operandSize);
+            var result = getShiftResult(eaProps.Operand, 1, isShiftLeft, operandSize);
 
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
             return eaProps.InstructionSize;
         }
 
+        // Arithmetic Shift Register Left/Right.
+        private int AslAsrRegShift(ushort opcode)
+        {
+            return LogicalArithmeticRegShift(opcode, GetArithmeticShiftResult);
+        }
+
+        // Arithmetic Shift Memory Left/Right.
+        private int AslAsrMemShift(ushort opcode)
+        {
+            return LogicalArithmeticMemShift(opcode, GetArithmeticShiftResult);
+        }
+
+        private uint GetArithmeticShiftResult(uint valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
+        {
+            int result;
+            bool newC;
+            bool newV = false;
+            if (isShiftLeft)
+            {
+                result = (int)valueForShift;
+                int initialV = (int)((valueForShift >> ((int)operandSize * 8 - 1)) & 0x1);
+                for (int i = 0; i < count; i++)
+                {
+                    result = result << 1;
+                    int intermediateV = (result >> ((int)operandSize * 8 - 1)) & 0x1;
+                    if (intermediateV != initialV)
+                    {
+                        newV = true;
+                        break;
+                    }
+                }
+
+                result = (int)valueForShift << count;
+                newC = (((valueForShift << (count - 1)) >> ((int)operandSize * 8 - 1)) & 0x1) == 1;
+            }
+            else
+            {
+                result = (int)valueForShift;
+                int initialV = (int)((valueForShift >> ((int)operandSize * 8 - 1)) & 0x1);
+                for (int i = 0; i < count; i++)
+                {
+                    result = result >> 1;
+                    int intermediateV = (result >> ((int)operandSize * 8 - 1)) & 0x1;
+                    if (intermediateV != initialV)
+                    {
+                        newV = true;
+                        break;
+                    }
+                }
+
+                result = (int)valueForShift >> count;
+                newC = ((valueForShift >> (count - 1)) & 0x1) == 1;
+            }
+
+            _regs.X = count == 0 ? _regs.X : newC;
+            _regs.C = newC;
+            _flagsHelper.AlterZ((uint)result, operandSize);
+            _flagsHelper.AlterN((uint)result, operandSize);
+            _regs.V = newV;
+
+            return (uint)result;
+        }
+
+        // Arithmetic Shift Left/Right, Register Shift.
+        private int LslLsrRegShift(ushort opcode)
+        {
+            return LogicalArithmeticRegShift(opcode, GetLogicalShiftResult);
+        }
+
+        // Arithmetic Shift Left/Right, Memory Shift.
+        private int LslLsrMemShift(ushort opcode)
+        {
+            return LogicalArithmeticMemShift(opcode, GetLogicalShiftResult);
+        }
+
         private uint GetLogicalShiftResult(uint valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
         {
             uint result;
-            bool newX, newC;
+            bool newC;
             if (isShiftLeft)
             {
                 result = valueForShift << count;
                 newC = (((valueForShift << (count - 1)) >> ((int)operandSize * 8 - 1)) & 0x1) == 1;
-                newX = count == 0 ? _regs.X : newC;
             }
             else
             {
                 result = valueForShift >> count;
                 newC = ((valueForShift >> (count - 1)) & 0x1) == 1;
-                newX = count == 0 ? _regs.X : newC;
             }
 
-            _regs.X = newX;
+            _regs.X = count == 0 ? _regs.X : newC;
             _regs.C = newC;
             _flagsHelper.AlterZ(result, operandSize);
             _flagsHelper.AlterN(result, operandSize);

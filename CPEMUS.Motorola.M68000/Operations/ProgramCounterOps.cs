@@ -59,7 +59,7 @@
 
             // Pushing the address of the next instruction following bsr
             // to stack.
-            PushStack((uint)(_regs.PC + instructionSize), OperandSize.Long);
+            _memHelper.PushStack((uint)(_regs.PC + instructionSize), OperandSize.Long);
 
             return pcDisplacement;
         }
@@ -142,7 +142,7 @@
         // Jump to Subroutine.
         private int Jsr(ushort opcode)
         {
-            PushStack(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Long);
+            _memHelper.PushStack(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Long);
             return Jmp(opcode);
         }
 
@@ -155,10 +155,10 @@
         // Return and Restore Condition Codes.
         private int Rtr(ushort opcode)
         {
-            var sr = PopStack(OperandSize.Word);
+            var sr = _memHelper.PopStack(OperandSize.Word);
             _regs.CCR = (byte)sr;
 
-            var pc = PopStack(OperandSize.Long);
+            var pc = _memHelper.PopStack(OperandSize.Long);
             _regs.PC = pc;
 
             return 0;
@@ -167,10 +167,23 @@
         // Return from Subroutine.
         private int Rts(ushort opcode)
         {
-            var pc = PopStack(OperandSize.Long);
+            var pc = _memHelper.PopStack(OperandSize.Long);
             _regs.PC = pc;
 
             return 0;
+        }
+
+        // Test an Operand.
+        private int Tst(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+
+            _flagsHelper.AlterN(eaProps.Operand, operandSize);
+            _flagsHelper.AlterZ(eaProps.Operand, operandSize);
+            _regs.V = _regs.C = false;
+
+            return eaProps.InstructionSize;
         }
     }
 

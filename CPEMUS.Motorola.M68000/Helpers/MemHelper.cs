@@ -107,6 +107,19 @@ namespace CPEMUS.Motorola.M68000.Helpers
             return operand;
         }
 
+        public void PushStack(uint value, OperandSize operandSize)
+        {
+            _regs.SP -= Math.Max((uint)operandSize, (uint)OperandSize.Word);
+            Write(value, _regs.SP, StoreLocation.Memory, operandSize);
+        }
+
+        public uint PopStack(OperandSize operandSize)
+        {
+            var result = Read(_regs.SP, StoreLocation.Memory, operandSize);
+            _regs.SP += Math.Max((uint)operandSize, (uint)OperandSize.Word);
+            return result;
+        }
+
         private int ExtendOperandSign(uint operand, OperandSize operandSize)
         {
             return operandSize switch
