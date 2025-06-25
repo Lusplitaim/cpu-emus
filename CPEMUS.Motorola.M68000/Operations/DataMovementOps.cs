@@ -153,18 +153,6 @@ namespace CPEMUS.Motorola.M68000
             return INSTR_DEFAULT_SIZE;
         }
 
-        // Move from SR.
-        private int MoveFromSr(ushort opcode)
-        {
-            var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
-
-            uint sr = _regs.SR;
-
-            _memHelper.Write(sr, eaProps.Address, eaProps.Location, OperandSize.Word);
-
-            return INSTR_DEFAULT_SIZE;
-        }
-
         // Move Multiple Registers.
         private int Movem(ushort opcode)
         {

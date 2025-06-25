@@ -11,6 +11,8 @@
             _memHelper = memHelper;
         }
 
+        public bool HasExceptions => _raisedExceptions.Count > 0;
+
         public void Raise(uint vectorNumber)
         {
             ExceptionVectorType exceptionType = vectorNumber switch

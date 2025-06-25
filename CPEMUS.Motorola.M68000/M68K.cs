@@ -83,6 +83,14 @@ namespace CPEMUS.Motorola.M68000
         private const int TRAPV_SFX = 0x4E76;
         private const int TST_SFX = 0x4A00;
         private const int UNLK_SFX = 0x4E58;
+        private const int EORI_TO_SR_SFX = 0x0A7C;
+        private const int ANDI_TO_SR_SFX = 0x027C;
+        private const int MOVE_TO_SR_SFX = 0x46C0;
+        private const int MOVE_USP_SFX = 0x4E60;
+        private const int ORI_TO_SR_SFX = 0x007C;
+        private const int RESET_SFX = 0x4E70;
+        private const int RTE_SFX = 0x4E73;
+        private const int STOP_SFX = 0x4E72;
         #endregion
 
         #region Opcode masks.
@@ -161,6 +169,14 @@ namespace CPEMUS.Motorola.M68000
         private const int TRAPV_MASK = 0xFFFF;
         private const int TST_MASK = 0xFF00;
         private const int UNLK_MASK = 0xFFF8;
+        private const int EORI_TO_SR_MASK = 0xFFFF;
+        private const int ANDI_TO_SR_MASK = 0xFFFF;
+        private const int MOVE_TO_SR_MASK = 0xFFC0;
+        private const int MOVE_USP_MASK = 0xFFF0;
+        private const int ORI_TO_SR_MASK = 0xFFFF;
+        private const int RESET_MASK = 0xFFFF;
+        private const int RTE_MASK = 0xFFFF;
+        private const int STOP_MASK = 0xFFFF;
         #endregion
 
         private const int INSTR_DEFAULT_SIZE = 2;
@@ -345,9 +361,21 @@ namespace CPEMUS.Motorola.M68000
             {
                 return AndiToCcr(opcode);
             }
+            if ((opcode & ANDI_TO_SR_MASK) == ANDI_TO_SR_SFX)
+            {
+                return AndiToSr(opcode);
+            }
             if ((opcode & EORI_TO_CCR_MASK) == EORI_TO_CCR_SFX)
             {
                 return EoriToCcr(opcode);
+            }
+            if ((opcode & EORI_TO_SR_MASK) == EORI_TO_SR_SFX)
+            {
+                return EoriToSr(opcode);
+            }
+            if ((opcode & ORI_TO_SR_MASK) == ORI_TO_SR_SFX)
+            {
+                return OriToSr(opcode);
             }
             if ((opcode & EORI_MASK) == EORI_SFX)
             {
@@ -431,6 +459,18 @@ namespace CPEMUS.Motorola.M68000
 
         private int Decode0x4(ushort opcode)
         {
+            if ((opcode & RESET_MASK) == RESET_SFX)
+            {
+                return Reset(opcode);
+            }
+            if ((opcode & RTE_MASK) == RTE_SFX)
+            {
+                return Rte(opcode);
+            }
+            if ((opcode & STOP_MASK) == STOP_SFX)
+            {
+                return Stop(opcode);
+            }
             if ((opcode & TRAP_MASK) == TRAP_SFX)
             {
                 return Trap(opcode);
@@ -490,6 +530,14 @@ namespace CPEMUS.Motorola.M68000
             if ((opcode & MOVEM_MASK) == MOVEM_SFX)
             {
                 return Movem(opcode);
+            }
+            if ((opcode & MOVE_TO_SR_MASK) == MOVE_TO_SR_SFX)
+            {
+                return MoveToSr(opcode);
+            }
+            if ((opcode & MOVE_USP_MASK) == MOVE_USP_SFX)
+            {
+                return MoveUsp(opcode);
             }
             if ((opcode & NBCD_MASK) == NBCD_SFX)
             {
@@ -606,110 +654,6 @@ namespace CPEMUS.Motorola.M68000
                 return Subx(opcode);
             }
             return Sub(opcode);
-        }
-
-        private int And(ushort opcode)
-        {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-
-            uint srcIdx = (uint)((opcode >> 9) & 0x7);
-            uint src = _memHelper.Read(srcIdx, StoreLocation.DataRegister, operandSize);
-
-            var eaProps = _eaHelper.Get(opcode, operandSize);
-            uint dest = eaProps.Operand;
-
-            uint result = src & dest;
-
-            // Flags.
-            _regs.N = (result >> ((int)operandSize * 8 - 1)) == 1;
-            _regs.Z = result == 0;
-            _regs.V = false;
-            _regs.C = false;
-
-            // Storing.
-            int storeDirection = (opcode >> 8) & 0x1;
-            if ((StoreDirection)storeDirection == StoreDirection.Source)
-            {
-                _memHelper.Write(result, srcIdx, StoreLocation.DataRegister, operandSize);
-            }
-            else
-            {
-                _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
-            }
-
-            return eaProps.InstructionSize;
-        }
-
-        private int Andi(ushort opcode)
-        {
-            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-            var immediateDataSize = operandSize == OperandSize.Long
-                ? (int)OperandSize.Long
-                : (int)OperandSize.Word;
-            var pc = _regs.PC;
-
-            uint src = _memHelper.ReadImmediate((uint)(pc + INSTR_DEFAULT_SIZE), operandSize);
-
-            var eaProps = _eaHelper.Get(opcode, operandSize, INSTR_DEFAULT_SIZE + immediateDataSize);
-            uint dest = eaProps.Operand;
-
-            uint result = src & dest;
-
-            // Flags.
-            _regs.N = (result >> ((int)operandSize * 8 - 1)) == 1;
-            _regs.Z = result == 0;
-            _regs.V = false;
-            _regs.C = false;
-
-            // Storing.
-            _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
-
-            return eaProps.InstructionSize;
-        }
-
-        // Andi to CCR.
-        private int AndiToCcr(ushort opcode)
-        {
-            uint src = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Byte);
-            var ccr = _regs.CCR;
-
-            byte result = (byte)(src & ccr);
-
-            // Storing.
-            _regs.CCR = result;
-
-            return 4;
-        }
-
-        private void Abcd(ref byte src, ref byte dest)
-        {
-            bool carry = false;
-            int res = src + dest + (_regs.X ? 1 : 0);
-            // If the lower nibble > 9 perform correction (add 0x6).
-            if ((res & 0x0F) > 0x09)
-            {
-                res += 0x6;
-                carry = true;
-            }
-            // If the higher nibble > 9 perform correction (add 0x60).
-            if ((res & 0xF0) > 0x90)
-            {
-                res += 0x60;
-            }
-            if (res > 0xFF)
-            {
-                carry = true;
-            }
-
-            _regs.X = carry;
-            _regs.C = carry;
-            // Clear if the result is non-zero.
-            if ((byte)res != 0)
-            {
-                _regs.Z = false;
-            }
-
-            dest = (byte)res;
         }
     }
 }

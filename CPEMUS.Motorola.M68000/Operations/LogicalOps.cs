@@ -132,5 +132,65 @@
 
             return INSTR_DEFAULT_SIZE + 2;
         }
+
+
+        private int And(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+
+            uint srcIdx = (uint)((opcode >> 9) & 0x7);
+            uint src = _memHelper.Read(srcIdx, StoreLocation.DataRegister, operandSize);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize);
+            uint dest = eaProps.Operand;
+
+            uint result = src & dest;
+
+            // Flags.
+            _regs.N = (result >> ((int)operandSize * 8 - 1)) == 1;
+            _regs.Z = result == 0;
+            _regs.V = false;
+            _regs.C = false;
+
+            // Storing.
+            int storeDirection = (opcode >> 8) & 0x1;
+            if ((StoreDirection)storeDirection == StoreDirection.Source)
+            {
+                _memHelper.Write(result, srcIdx, StoreLocation.DataRegister, operandSize);
+            }
+            else
+            {
+                _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
+            }
+
+            return eaProps.InstructionSize;
+        }
+
+        private int Andi(ushort opcode)
+        {
+            var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
+            var immediateDataSize = operandSize == OperandSize.Long
+                ? (int)OperandSize.Long
+                : (int)OperandSize.Word;
+            var pc = _regs.PC;
+
+            uint src = _memHelper.ReadImmediate((uint)(pc + INSTR_DEFAULT_SIZE), operandSize);
+
+            var eaProps = _eaHelper.Get(opcode, operandSize, INSTR_DEFAULT_SIZE + immediateDataSize);
+            uint dest = eaProps.Operand;
+
+            uint result = src & dest;
+
+            // Flags.
+            _regs.N = (result >> ((int)operandSize * 8 - 1)) == 1;
+            _regs.Z = result == 0;
+            _regs.V = false;
+            _regs.C = false;
+
+            // Storing.
+            _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
+
+            return eaProps.InstructionSize;
+        }
     }
 }
