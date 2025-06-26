@@ -1,4 +1,5 @@
-﻿using CPEMUS.Motorola.M68000.Helpers;
+﻿using CPEMUS.Motorola.M68000.Exceptions;
+using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000
 {
@@ -21,7 +22,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var vectorNumber = (opcode & 0xF) + 32;
@@ -34,7 +35,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             if (_regs.V)
@@ -50,7 +51,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
@@ -79,7 +80,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
@@ -94,7 +95,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
@@ -109,7 +110,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
@@ -124,7 +125,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var addrRegIdx = (uint)(opcode & 0x7);
@@ -148,7 +149,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
@@ -163,7 +164,7 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             return INSTR_DEFAULT_SIZE;
@@ -174,11 +175,10 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
-            _regs.SR = (ushort)_memHelper.PopStack(OperandSize.Word);
-            _regs.PC = _memHelper.PopStack(OperandSize.Long);
+            _exceptionHelper.Return();
 
             return 0;
         }
@@ -188,11 +188,13 @@ namespace CPEMUS.Motorola.M68000
         {
             if (!IsInSupervisorMode())
             {
-                throw new InvalidOperationException();
+                throw new PrivilegeViolationException();
             }
 
             var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
             _regs.SR = (ushort)operand;
+
+            Status = M68KStatus.Stopped;
 
             return 4;
         }

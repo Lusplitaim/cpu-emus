@@ -46,6 +46,7 @@
         }
 
         public MPrivilegeMode Mode => (MPrivilegeMode)((SR >> 13) & 0x1);
+        public bool IsTracingEnabled => ((SR >> 14) & 0x3) == 2;
 
         // Program Counter.
         public uint PC { get; set; }

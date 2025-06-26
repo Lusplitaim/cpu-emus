@@ -2,7 +2,7 @@
 {
     internal class ExceptionHelper
     {
-        private readonly Stack<ExceptionVectorType> _raisedExceptions = new();
+        private readonly Stack<ExceptionVectorType> _pendingInterrupts = new();
         private readonly M68KRegs _regs;
         private readonly MemHelper _memHelper;
         public ExceptionHelper(M68KRegs regs, MemHelper memHelper)
@@ -11,7 +11,18 @@
             _memHelper = memHelper;
         }
 
-        public bool HasExceptions => _raisedExceptions.Count > 0;
+        public bool HasPendingInterrupts => _pendingInterrupts.Count > 0;
+
+        public void RaiseReset()
+        {
+            _regs.SR = default;
+            EnterSupervisorMode();
+            DisableTracing();
+            DisableInterrupts();
+
+            _regs.SP = _memHelper.Read(0x0, StoreLocation.Memory, OperandSize.Long);
+            _regs.PC = _memHelper.Read(0x4, StoreLocation.Memory, OperandSize.Long);
+        }
 
         public void Raise(uint vectorNumber)
         {
@@ -24,26 +35,23 @@
             var vectorAddress = vectorNumber * (int)OperandSize.Long;
 
             FillExceptionStackFrame(vectorAddress, exceptionType);
-
-            _raisedExceptions.Push(exceptionType);
         }
 
         private void FillExceptionStackFrame(uint vectorAddress, ExceptionVectorType exceptionType)
         {
             var prevStatusRegister = _regs.SR;
             EnterSupervisorMode();
+            DisableTracing();
+
+            _memHelper.PushStack(_regs.PC, OperandSize.Long);
+            _memHelper.PushStack(prevStatusRegister, OperandSize.Word);
 
             switch (exceptionType)
             {
-                case ExceptionVectorType.IllegalInstruction:
-                case ExceptionVectorType.IntegerDivideByZero:
-                case ExceptionVectorType.Chk:
-                case ExceptionVectorType.TrapV:
-                case ExceptionVectorType.PrivilegeViolation:
-                case ExceptionVectorType.Trace:
-                case ExceptionVectorType.Trap:
-                    _memHelper.PushStack(_regs.PC, OperandSize.Long);
-                    _memHelper.PushStack(prevStatusRegister, OperandSize.Word);
+                case ExceptionVectorType.AddressError:
+                    // _memHelper.PushStack(_regs.IR, OperandSize.Word); // Instruction register.
+                    // _memHelper.PushStack(accessAddr, OperandSize.Long); // Address access.
+                    // _memHelper.PushStack(0x0000, OperandSize.Word);
                     break;
             }
 
@@ -55,38 +63,26 @@
             _regs.SR = (ushort)(_regs.SR | 0x2000);
         }
 
-        public void Return()
+        private void DisableTracing()
         {
-            ExceptionVectorType exceptionType = _raisedExceptions.Pop();
-
-            ClearExceptionStackFrame(exceptionType);
+            _regs.SR = (ushort)(_regs.SR & 0x3FFF);
         }
 
-        private void ClearExceptionStackFrame(ExceptionVectorType exceptionType)
+        private void DisableInterrupts()
         {
-            switch (exceptionType)
-            {
-                case ExceptionVectorType.IllegalInstruction:
-                case ExceptionVectorType.IntegerDivideByZero:
-                case ExceptionVectorType.Chk:
-                case ExceptionVectorType.TrapV:
-                case ExceptionVectorType.PrivilegeViolation:
-                case ExceptionVectorType.Trace:
-                case ExceptionVectorType.Trap:
-                    _regs.SR = (ushort)_memHelper.PopStack(OperandSize.Word);
-                    _regs.PC = _memHelper.PopStack(OperandSize.Long);
-                    break;
-                case ExceptionVectorType.AddressError:
+            _regs.SR = (ushort)(_regs.SR | 0x0700);
+        }
 
-                    break;
-            }
+        public void Return()
+        {
+            _regs.SR = (ushort)_memHelper.PopStack(OperandSize.Word);
+            _regs.PC = _memHelper.PopStack(OperandSize.Long);
         }
     }
 
     internal enum ExceptionVectorType
     {
-        ResetInitInterruptStackPointer = 0,
-        ResetInitProgramCounter = 1,
+        Reset = 0,
         AccessFault = 2,
         AddressError = 3,
         IllegalInstruction = 4,

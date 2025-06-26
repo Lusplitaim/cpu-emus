@@ -1,4 +1,5 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
+using CPEMUS.Motorola.M68000.Exceptions;
 using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000
@@ -181,16 +182,18 @@ namespace CPEMUS.Motorola.M68000
 
         private const int INSTR_DEFAULT_SIZE = 2;
 
+        private bool _isResetTriggered;
+
+        public IList<byte> Memory {  get { return _mem; } }
+        public M68KRegs Registers {  get { return _regs; } }
+        public M68KStatus Status { get; private set; } = M68KStatus.Running;
+
         private readonly M68KRegs _regs;
         private readonly IList<byte> _mem;
         private readonly EAHelper _eaHelper;
         private readonly MemHelper _memHelper;
         private readonly FlagsHelper _flagsHelper;
         private readonly ExceptionHelper _exceptionHelper;
-
-        public IList<byte> Memory {  get { return _mem; } }
-        public M68KRegs Registers {  get { return _regs; } }
-
         public M68K(IList<byte> mem)
         {
             _mem = mem;
@@ -216,18 +219,70 @@ namespace CPEMUS.Motorola.M68000
             ushort opcode;
             try
             {
-                opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
+                if (_isResetTriggered)
+                {
+                    _exceptionHelper.RaiseReset();
+                    _isResetTriggered = false;
+                    Status = M68KStatus.Running;
+                    return true;
+                }
+
+                if (Status == M68KStatus.Halted)
+                {
+                    return false;
+                }
+
+                if (_exceptionHelper.HasPendingInterrupts)
+                {
+                    //if (_exceptionHelper.TryProcessInterrupt())
+                    //{
+                    //    Status = M68KStatus.Running;
+                    //    return true;
+                    //}
+                }
+
+                bool shouldTriggerTracing = _regs.IsTracingEnabled;
+
+                if (Status == M68KStatus.Running)
+                {
+                    opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
+
+                    var instructionSize = DecodeOpcode(opcode);
+
+                    _regs.PC += (uint)instructionSize;
+                }
+
+                // Address in Program Counter should not be odd.
+                if (Status == M68KStatus.Running && (_regs.PC % 2) != 0)
+                {
+                    _exceptionHelper.Raise((uint)ExceptionVectorType.AddressError);
+                    return true;
+                }
+
+                // If the tracing is enabled at the beginning of an instruction
+                // execution then trace exception will be raised after
+                // the instruction is executed.
+                // For info:
+                // Motorola Microprocessors User's Manual (9th Edition), Paragraph 6.3.8.
+                if (shouldTriggerTracing)
+                {
+                    _exceptionHelper.Raise((uint)ExceptionVectorType.Trace);
+                    Status = M68KStatus.Running;
+                    return true;
+                }
+
+                return true;
             }
-            catch (IndexOutOfRangeException)
+            catch (M68KException ex)
             {
-                return false;
+                _exceptionHelper.Raise((uint)ex.ExceptionVectorType);
+                return true;
             }
+        }
 
-            var instructionSize = DecodeOpcode(opcode);
-
-            _regs.PC += (uint)instructionSize;
-
-            return true;
+        public void Reset()
+        {
+            _isResetTriggered = true;
         }
 
         public int DecodeOpcode(ushort opcode)

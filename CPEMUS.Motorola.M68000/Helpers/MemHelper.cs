@@ -1,4 +1,5 @@
-﻿using CPEMUS.Motorola.M68000.Extensions;
+﻿using CPEMUS.Motorola.M68000.Exceptions;
+using CPEMUS.Motorola.M68000.Extensions;
 
 namespace CPEMUS.Motorola.M68000.Helpers
 {
@@ -16,6 +17,12 @@ namespace CPEMUS.Motorola.M68000.Helpers
 
         public void Write(uint value, uint address, StoreLocation location, OperandSize operandSize)
         {
+            address = address & 0xFFFFFF;
+            if ((address % 2) != 0)
+            {
+                throw new AddressErrorException();
+            }
+
             switch (location)
             {
                 case StoreLocation.DataRegister:
@@ -35,7 +42,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 case StoreLocation.StatusRegister:
                     if (operandSize == OperandSize.Long)
                     {
-                        throw new InvalidOperationException("Long operand size is not supported for status register");
+                        throw new IllegalInstructionException();
                     }
                     _regs.SR = (ushort)MergeDestWithValue(_regs.SR, value, operandSize);
                     break;
@@ -54,7 +61,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 OperandSize.Byte => (uint)((dest & (~0xFF)) | (value & 0xFF)),
                 OperandSize.Word => (uint)((dest & (~0xFFFF)) | (value & 0xFFFF)),
                 OperandSize.Long => value,
-                _ => throw new InvalidOperationException("Operand size type is unknown"),
+                _ => throw new IllegalInstructionException(),
             };
         }
 
@@ -65,20 +72,26 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 OperandSize.Byte => value & 0xFF,
                 OperandSize.Word => value & 0xFFFF,
                 OperandSize.Long => value,
-                _ => throw new InvalidOperationException("Operand size type is unknown"),
+                _ => throw new IllegalInstructionException(),
             };
         }
 
         public uint Read(uint address, StoreLocation location, OperandSize operandSize, bool signExtended = false)
         {
+            address = address & 0xFFFFFF;
+            if ((address % 2) != 0)
+            {
+                throw new AddressErrorException();
+            }
+
             var operand = location switch
             {
                 StoreLocation.DataRegister => Read(_regs.D[address], operandSize),
                 StoreLocation.AddressRegister => address == SP_ADDRESS
                     ? Read(_regs.SP, operandSize)
                     : Read(_regs.A[address], operandSize),
-                StoreLocation.Memory => _mem.Read(address & 0xFFFFFF, operandSize),
-                _ => throw new InvalidOperationException("Operand location type is unknown"),
+                StoreLocation.Memory => _mem.Read(address, operandSize),
+                _ => throw new IllegalInstructionException(),
             };
 
             if (signExtended)
@@ -96,7 +109,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 OperandSize.Byte => _mem.ReadWord(address) & 0xFF,
                 OperandSize.Word => _mem.ReadWord(address) & 0xFFFF,
                 OperandSize.Long => _mem.ReadLong(address),
-                _ => throw new InvalidOperationException("Operand size type is unknown"),
+                _ => throw new IllegalInstructionException(),
             };
 
             if (signExtended)
@@ -127,7 +140,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 OperandSize.Byte => (sbyte)operand,
                 OperandSize.Word => (short)operand,
                 OperandSize.Long => (int)operand,
-                _ => throw new InvalidOperationException("Operand size type is unknown"),
+                _ => throw new IllegalInstructionException(),
             };
         }
     }

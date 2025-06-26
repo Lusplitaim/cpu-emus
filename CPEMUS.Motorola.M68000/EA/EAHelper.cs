@@ -1,4 +1,5 @@
-﻿using CPEMUS.Motorola.M68000.Extensions;
+﻿using CPEMUS.Motorola.M68000.Exceptions;
+using CPEMUS.Motorola.M68000.Extensions;
 using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000.EA
@@ -59,11 +60,11 @@ namespace CPEMUS.Motorola.M68000.EA
                         0x2 => GetPCDisplaceVal(opcodeSize), // EA = [PC + displacement16].
                         0x3 => GetIndexedAddressingVal((uint)(_regs.PC + opcodeSize), opcodeSize), // EA = [PC + displacement8 + Xn.size * scale].
                         0x4 => GetImmediateVal(operandSize, opcodeSize),
-                        _ => throw new NotImplementedException("This addressing mode is unknown or not implemented."),
+                        _ => throw new IllegalInstructionException(),
                     };
                     break;
                 default:
-                    throw new NotImplementedException("This addressing mode is unknown or not implemented.");
+                    throw new IllegalInstructionException();
             }
 
             if (getOperand)
