@@ -1,4 +1,6 @@
-﻿namespace CPEMUS.Motorola.M68000.Helpers
+﻿using CPEMUS.Motorola.M68000.Exceptions;
+
+namespace CPEMUS.Motorola.M68000.Helpers
 {
     internal class ExceptionHelper
     {
@@ -24,7 +26,7 @@
             _regs.PC = _memHelper.Read(0x4, StoreLocation.Memory, OperandSize.Long);
         }
 
-        public void Raise(uint vectorNumber)
+        public void Raise(uint vectorNumber, uint? newPc = null)
         {
             ExceptionVectorType exceptionType = vectorNumber switch
             {
@@ -34,26 +36,31 @@
             };
             var vectorAddress = vectorNumber * (int)OperandSize.Long;
 
-            FillExceptionStackFrame(vectorAddress, exceptionType);
+            ProcessException(vectorAddress, newPc);
         }
 
-        private void FillExceptionStackFrame(uint vectorAddress, ExceptionVectorType exceptionType)
+        public void Raise(M68KException exception)
+        {
+            uint? newPc = exception.ExceptionVectorType switch
+            {
+                ExceptionVectorType.PrivilegeViolation => _regs.PC,
+                ExceptionVectorType.AddressError => _regs.PC,
+                ExceptionVectorType.IllegalInstruction => _regs.PC + 2,
+                _ => null,
+            };
+            var vectorAddress = (uint)exception.ExceptionVectorType * (int)OperandSize.Long;
+
+            ProcessException(vectorAddress, newPc);
+        }
+
+        private void ProcessException(uint vectorAddress, uint? newPc = null)
         {
             var prevStatusRegister = _regs.SR;
             EnterSupervisorMode();
             DisableTracing();
 
-            _memHelper.PushStack(_regs.PC, OperandSize.Long);
+            _memHelper.PushStack(newPc ?? _regs.PC, OperandSize.Long);
             _memHelper.PushStack(prevStatusRegister, OperandSize.Word);
-
-            switch (exceptionType)
-            {
-                case ExceptionVectorType.AddressError:
-                    // _memHelper.PushStack(_regs.IR, OperandSize.Word); // Instruction register.
-                    // _memHelper.PushStack(accessAddr, OperandSize.Long); // Address access.
-                    // _memHelper.PushStack(0x0000, OperandSize.Word);
-                    break;
-            }
 
             _regs.PC = _memHelper.Read(vectorAddress, StoreLocation.Memory, OperandSize.Long);
         }
@@ -75,8 +82,9 @@
 
         public void Return()
         {
-            _regs.SR = (ushort)_memHelper.PopStack(OperandSize.Word);
+            var statusReg = (ushort)_memHelper.PopStack(OperandSize.Word);
             _regs.PC = _memHelper.PopStack(OperandSize.Long);
+            _regs.SR = statusReg;
         }
     }
 

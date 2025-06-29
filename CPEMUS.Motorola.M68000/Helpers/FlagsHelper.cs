@@ -21,16 +21,22 @@
             _regs.N = ((val & mask) >> ((int)operandSize * 8 - 1)) == 1;
         }
 
-        public void AlterZ(uint val, OperandSize operandSize)
+        public void AlterZ(uint val, OperandSize operandSize, bool doNotChangeIfZero = false)
         {
             var mask = _operandSizeMask[operandSize];
-            _regs.Z = (val & mask) == 0;
+            var newZ = (val & mask) == 0;
+            _regs.Z = newZ && doNotChangeIfZero ? _regs.Z : newZ;
         }
 
         public void AlterC(long val, OperandSize operandSize)
         {
+            _regs.C = (val >> (int)operandSize*8) != 0;
+        }
+
+        public void AlterCSub(uint dest, uint src, OperandSize operandSize)
+        {
             var mask = _operandSizeMask[operandSize];
-            _regs.C = (val & ~mask) > 0;
+            _regs.C = (dest & mask) < (src & mask);
         }
 
         public void AlterV(uint op1, uint op2, long result, OperandSize operandSize)
@@ -43,6 +49,27 @@
             var operandsAreSameSign = op1Msb == op2Msb;
             var resultSignDiffers = op1Msb != resultMsb;
             _regs.V = operandsAreSameSign && resultSignDiffers;
+        }
+
+        public void AlterVSub(uint dest, uint src, long result, OperandSize operandSize)
+        {
+            var mask = _operandSizeMask[operandSize];
+            var destPositive = ((dest & mask) >> ((int)operandSize * 8 - 1)) == 1;
+            var srcPositive = ((src & mask) >> ((int)operandSize * 8 - 1)) == 1;
+            var resultPositive = ((result & mask) >> ((int)operandSize * 8 - 1)) == 1;
+
+            _regs.V = srcPositive && !destPositive && resultPositive
+                || !srcPositive && destPositive && !resultPositive;
+        }
+
+        public void AlterVCmp(uint dest, uint src, long result, OperandSize operandSize)
+        {
+            var mask = _operandSizeMask[operandSize];
+            var srcPositive = ((src & mask) >> ((int)operandSize * 8 - 1)) == 0;
+            var destPositive = ((dest & mask) >> ((int)operandSize * 8 - 1)) == 0;
+            var resultPositive = ((result & mask) >> ((int)operandSize * 8 - 1)) == 0;
+
+            _regs.V = (srcPositive && !destPositive && resultPositive) || (!srcPositive && destPositive && !resultPositive);
         }
     }
 }

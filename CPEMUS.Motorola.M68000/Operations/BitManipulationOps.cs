@@ -13,7 +13,7 @@ namespace CPEMUS.Motorola.M68000
             int bitNumber;
             if (srcImmediate)
             {
-                bitNumber = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word) % ((int)operandSize * 8);
+                bitNumber = (int)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word) % ((int)operandSize * 8);
             }
             else
             {

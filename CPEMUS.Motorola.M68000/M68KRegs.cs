@@ -51,16 +51,25 @@
         // Program Counter.
         public uint PC { get; set; }
 
+        private ushort _sr;
         // Status Register.
-        public ushort SR;
+        public ushort SR
+        {
+            get => _sr;
+            set
+            {
+                // MC68000 doesn't support T0 tracing
+                // and Master Mode thus it has bits 14 and 12 as zero.
+                // Ref: Motorola Programmer's Reference Manual, paragraph 1.3.2.
+                _sr = (ushort)(value & 0xA71F);
+            }
+        }
 
         // Condition Code Register.
-        // Upper byte is read as all zeroes
-        // and is ignored when written.
         public byte CCR
         {
             get => (byte)SR;
-            set => SR = (ushort)((SR & 0xFF00) | value);
+            set => SR = (ushort)((SR & 0xFF00) | (value & 0x1F));
         }
 
         #region Flags.

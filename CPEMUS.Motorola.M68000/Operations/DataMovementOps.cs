@@ -45,29 +45,29 @@ namespace CPEMUS.Motorola.M68000
         private int Lea(ushort opcode)
         {
             var addrRegIdx = (uint)((opcode >> 9) & 0x7);
-            var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Long, loadOperand: false);
             _memHelper.Write(eaProps.Address, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
-            return INSTR_DEFAULT_SIZE;
+            return eaProps.InstructionSize;
         }
 
         // Push Effective Address.
         private int Pea(ushort opcode)
         {
-            var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Long, loadOperand: false);
             _memHelper.PushStack(eaProps.Address, OperandSize.Long);
-            return INSTR_DEFAULT_SIZE;
+            return eaProps.InstructionSize;
         }
 
         // Link and Allocate.
         private int Link(ushort opcode)
         {
-            var addrRegIdx = (uint)((opcode >> 9) & 0x7);
+            var addrRegIdx = (uint)(opcode & 0x7);
             var addrReg = _memHelper.Read(addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
             _memHelper.PushStack(addrReg, OperandSize.Long);
 
             _memHelper.Write(_regs.SP, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
-            int displacement = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word, signExtended: true);
+            int displacement = (int)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word, signExtended: true);
             _regs.SP = (uint)(_regs.SP + displacement);
 
             return INSTR_DEFAULT_SIZE + 2;
@@ -107,7 +107,11 @@ namespace CPEMUS.Motorola.M68000
             }
 
             var srcEaProps = _eaHelper.Get(opcode, operandSize);
-            var destEaProps = _eaHelper.Get((ushort)(opcode >> 6), operandSize);
+
+            var destEaModeField = (opcode >> 6) & 0x7;
+            var destEaRegField = (opcode >> 9) & 0x7;
+            var destEaProps = _eaHelper.Get((ushort)((destEaModeField << 3) | destEaRegField), operandSize,
+                loadOperand: false, opcodeSize: srcEaProps.InstructionSize);
 
             _memHelper.Write(srcEaProps.Operand, destEaProps.Address, destEaProps.Location, operandSize);
 
@@ -116,7 +120,7 @@ namespace CPEMUS.Motorola.M68000
             _regs.V = false;
             _regs.C = false;
 
-            return INSTR_DEFAULT_SIZE;
+            return destEaProps.InstructionSize;
         }
 
         // Move Address.
@@ -138,19 +142,20 @@ namespace CPEMUS.Motorola.M68000
             var srcEaProps = _eaHelper.Get(opcode, operandSize, signExtended: true);
             var addressRegIdx = (uint)((opcode >> 9) & 0x7);
 
-            _memHelper.Write(srcEaProps.Operand, addressRegIdx, StoreLocation.AddressRegister, operandSize);
+            // All 32 bits are loaded into the address register.
+            _memHelper.Write(srcEaProps.Operand, addressRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
-            return INSTR_DEFAULT_SIZE;
+            return srcEaProps.InstructionSize;
         }
 
         // Move to CCR.
         private int MoveToCcr(ushort opcode)
         {
-            var eaProps = _eaHelper.Get(opcode, OperandSize.Byte);
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
 
             _regs.CCR = (byte)eaProps.Operand;
 
-            return INSTR_DEFAULT_SIZE;
+            return eaProps.InstructionSize;
         }
 
         // Move Multiple Registers.

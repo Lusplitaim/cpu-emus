@@ -17,12 +17,6 @@ namespace CPEMUS.Motorola.M68000.Helpers
 
         public void Write(uint value, uint address, StoreLocation location, OperandSize operandSize)
         {
-            address = address & 0xFFFFFF;
-            if ((address % 2) != 0)
-            {
-                throw new AddressErrorException();
-            }
-
             switch (location)
             {
                 case StoreLocation.DataRegister:
@@ -37,7 +31,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                     Write(ref _regs.A[address], value, operandSize);
                     break;
                 case StoreLocation.Memory:
-                    _mem.Write(address, value, operandSize);
+                    _mem.Write(TruncateAddress(address, operandSize), value, operandSize);
                     break;
                 case StoreLocation.StatusRegister:
                     if (operandSize == OperandSize.Long)
@@ -78,19 +72,14 @@ namespace CPEMUS.Motorola.M68000.Helpers
 
         public uint Read(uint address, StoreLocation location, OperandSize operandSize, bool signExtended = false)
         {
-            address = address & 0xFFFFFF;
-            if ((address % 2) != 0)
-            {
-                throw new AddressErrorException();
-            }
-
-            var operand = location switch
+           var operand = location switch
             {
                 StoreLocation.DataRegister => Read(_regs.D[address], operandSize),
                 StoreLocation.AddressRegister => address == SP_ADDRESS
                     ? Read(_regs.SP, operandSize)
                     : Read(_regs.A[address], operandSize),
-                StoreLocation.Memory => _mem.Read(address, operandSize),
+                StoreLocation.Memory => _mem.Read(TruncateAddress(address, operandSize), operandSize),
+                StoreLocation.ImmediateData => ReadImmediate(TruncateAddress(address, operandSize), operandSize),
                 _ => throw new IllegalInstructionException(),
             };
 
@@ -102,7 +91,17 @@ namespace CPEMUS.Motorola.M68000.Helpers
             return operand;
         }
 
-        public uint ReadImmediate(uint address, OperandSize operandSize, bool signExtended = false)
+        private uint TruncateAddress(uint address, OperandSize operandSize)
+        {
+            address = address & 0xFFFFFF;
+            if (operandSize != OperandSize.Byte && (address % 2) != 0)
+            {
+                throw new AddressErrorException();
+            }
+            return address;
+        }
+
+        private uint ReadImmediate(uint address, OperandSize operandSize)
         {
             var operand = operandSize switch
             {
@@ -111,11 +110,6 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 OperandSize.Long => _mem.ReadLong(address),
                 _ => throw new IllegalInstructionException(),
             };
-
-            if (signExtended)
-            {
-                return (uint)ExtendOperandSign(operand, operandSize);
-            }
 
             return operand;
         }

@@ -2,27 +2,20 @@
 {
     public static class IListExtensions
     {
-        public const int ADDRESS_MASK = 0xFFFFFF;
-
-        private static int ProjectMemAddress(uint addr)
-        {
-            return (int)(addr & ADDRESS_MASK);
-        }
-
         public static uint ReadByte(this IList<byte> arr, uint idx)
         {
-            return arr[ProjectMemAddress(idx)];
+            return arr[(int)idx];
         }
 
         public static uint ReadWord(this IList<byte> arr, uint idx)
         {
-            return (uint)((arr[ProjectMemAddress(idx)] << 8) | arr[ProjectMemAddress(idx + 1)]);
+            return (uint)((arr[(int)idx] << 8) | arr[(int)(idx + 1)]);
         }
 
         public static uint ReadLong(this IList<byte> arr, uint idx)
         {
-            return (uint)((arr[ProjectMemAddress(idx)] << 24) | (arr[ProjectMemAddress(idx + 1)] << 16)
-                | (arr[ProjectMemAddress(idx + 2)] << 8) | arr[ProjectMemAddress(idx + 3)]);
+            return (uint)((arr[(int)idx] << 24) | (arr[(int)(idx + 1)] << 16)
+                | (arr[(int)(idx + 2)] << 8) | arr[(int)(idx + 3)]);
         }
 
         public static uint Read(this IList<byte> arr, uint idx, OperandSize operandSize)
@@ -42,21 +35,21 @@
 
         public static void WriteByte(this IList<byte> arr, uint idx, uint value)
         {
-            arr[ProjectMemAddress(idx)] = (byte)value;
+            arr[(int)idx] = (byte)value;
         }
 
         public static void WriteWord(this IList<byte> arr, uint idx, uint value)
         {
-            arr[ProjectMemAddress(idx)] = (byte)(value >> 8);
-            arr[ProjectMemAddress(idx + 1)] = (byte)value;
+            arr[(int)idx] = (byte)(value >> 8);
+            arr[(int)(idx + 1)] = (byte)value;
         }
 
         public static void WriteLong(this IList<byte> arr, uint idx, uint value)
         {
-            arr[ProjectMemAddress(idx)] = (byte)(value >> 24);
-            arr[ProjectMemAddress(idx + 1)] = (byte)(value >> 16);
-            arr[ProjectMemAddress(idx + 2)] = (byte)(value >> 8);
-            arr[ProjectMemAddress(idx + 3)] = (byte)value;
+            arr[(int)idx] = (byte)(value >> 24);
+            arr[(int)(idx + 1)] = (byte)(value >> 16);
+            arr[(int)(idx + 2)] = (byte)(value >> 8);
+            arr[(int)(idx + 3)] = (byte)value;
         }
 
         public static void Write(this IList<byte> arr, uint idx, uint value, OperandSize operandSize)

@@ -5,6 +5,7 @@
         DataRegister = 0,
         AddressRegister = 1,
         Memory = 2,
-        StatusRegister = 3,
+        ImmediateData = 3,
+        StatusRegister = 4,
     }
 }

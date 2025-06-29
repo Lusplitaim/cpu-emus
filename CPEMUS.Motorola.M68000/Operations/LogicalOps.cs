@@ -29,7 +29,7 @@
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
-            var immediateOperand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, operandSize);
+            var immediateOperand = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, operandSize);
 
             var opcodeSize = INSTR_DEFAULT_SIZE + (operandSize == OperandSize.Byte ? 2 : (int)operandSize);
             var eaProps = _eaHelper.Get(opcode, operandSize, opcodeSize);
@@ -49,10 +49,10 @@
         // Exclusive-OR Immediate to CCR.
         private int EoriToCcr(ushort opcode)
         {
-            uint src = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Byte);
+            uint src = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Byte);
             var ccr = _regs.CCR;
 
-            byte result = (byte)(src ^ ccr);
+            var result = (byte)(src ^ ccr);
 
             _regs.CCR = result;
 
@@ -106,9 +106,9 @@
         private int Ori(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
-            var opcodeSize = Math.Max((int)operandSize, (int)OperandSize.Word);
+            var opcodeSize = Math.Max((int)operandSize, (int)OperandSize.Word) + INSTR_DEFAULT_SIZE;
+            var immediateData = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, operandSize);
             var eaProps = _eaHelper.Get(opcode, operandSize, opcodeSize);
-            var immediateData = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, operandSize);
 
             var result = eaProps.Operand | immediateData;
 
@@ -124,7 +124,7 @@
         // Inclusive-OR Immediate to CCR.
         private int OriToCcr(ushort opcode)
         {
-            var immediateData = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Byte);
+            var immediateData = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Byte);
 
             var result = _regs.CCR | immediateData;
 
@@ -174,7 +174,7 @@
                 : (int)OperandSize.Word;
             var pc = _regs.PC;
 
-            uint src = _memHelper.ReadImmediate((uint)(pc + INSTR_DEFAULT_SIZE), operandSize);
+            uint src = _memHelper.Read(pc + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, operandSize);
 
             var eaProps = _eaHelper.Get(opcode, operandSize, INSTR_DEFAULT_SIZE + immediateDataSize);
             uint dest = eaProps.Operand;

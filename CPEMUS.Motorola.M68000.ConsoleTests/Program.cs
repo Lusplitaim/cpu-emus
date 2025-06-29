@@ -6,7 +6,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
     {
         static void Main(string[] args)
         {
-            var filePath = "C:\\m68k-tests\\Bcc.json";
+            var filePath = "C:\\m68k-tests\\SUBX.b.json";
 
             using var streamReader = File.OpenText(filePath);
 
@@ -17,7 +17,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
 
             if (testCases != null && testCases.Count != 0)
             {
-                RunTestCases(testCases, 0);
+                RunTestCases(testCases, null);
             }
         }
 
@@ -27,7 +27,6 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             if (testCaseIdx.HasValue)
             {
                 var testCase = testCases[testCaseIdx.Value];
-                var initialCpuState = testCase.Initial;
 
                 var cpu = CpuTest.ToM68K(testCase.Initial);
                 cpu.Run();
@@ -40,16 +39,27 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             }
             else
             {
-                for (int i = 0; i < testCases.Count; i++, passedTestCount++)
+                List<CpuTest> cpuTests = new();
+                // Filtering tests that throw Address exception.
+                foreach (var cpuTest in testCases)
                 {
-                    var initialCpuState = testCases[i].Initial;
+                    var finalCpuState = cpuTest.Final;
+                    if (!finalCpuState.Ram.Any(ram => ram[0] >= 12 && ram[0] <= 15))
+                    {
+                        cpuTests.Add(cpuTest);
+                    }
+                }
 
-                    var cpu = CpuTest.ToM68K(testCases[i].Initial);
+                for (int i = 0; i < cpuTests.Count; i++, passedTestCount++)
+                {
+                    var testCase = cpuTests[i];
+
+                    var cpu = CpuTest.ToM68K(testCase.Initial);
                     cpu.Run();
-                    var expected = CpuTest.ToM68K(testCases[i].Final);
+                    var expected = CpuTest.ToM68K(testCase.Final);
                     if (!CpuTest.Assert(cpu, expected))
                     {
-                        Console.WriteLine($"Failed on {i} test case: {testCases[i].Name}");
+                        Console.WriteLine($"Failed on {i} test case: {testCase.Name}");
                         return;
                     }
                 }

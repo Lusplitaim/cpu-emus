@@ -1,18 +1,16 @@
-﻿using System.Collections.Specialized;
-
-namespace CPEMUS.Motorola.M68000
+﻿namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        private int LogicalArithmeticRegShift(ushort opcode, Func<uint, int, bool, OperandSize, uint> getShiftResult)
+        private int LogicalArithmeticRegShift(ushort opcode, Func<ulong, int, bool, OperandSize, uint> getShiftResult)
         {
-            var count = (opcode >> 9) & 0x7;
+            var count = (uint)((opcode >> 9) & 0x7);
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
             bool isCountInReg = ((opcode >> 5) & 0x1) == 1;
             if (isCountInReg)
             {
-                count = (int)_memHelper.Read((uint)count, StoreLocation.DataRegister, operandSize) % 64;
+                count = _memHelper.Read(count, StoreLocation.DataRegister, operandSize) % 64;
             }
             else if (count == 0)
             {
@@ -20,17 +18,17 @@ namespace CPEMUS.Motorola.M68000
             }
 
             var dataRegIdx = (uint)(opcode & 0x7);
-            var valueForShift = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
+            uint valueForShift = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, operandSize);
 
             bool isShiftLeft = ((opcode >> 8) & 0x1) == 1;
-            var result = getShiftResult(valueForShift, count, isShiftLeft, operandSize);
+            var result = getShiftResult(valueForShift, (int)count, isShiftLeft, operandSize);
 
             _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, operandSize);
 
             return INSTR_DEFAULT_SIZE;
         }
 
-        private int LogicalArithmeticMemShift(ushort opcode, Func<uint, int, bool, OperandSize, uint> getShiftResult)
+        private int LogicalArithmeticMemShift(ushort opcode, Func<ulong, int, bool, OperandSize, uint> getShiftResult)
         {
             bool isShiftLeft = ((opcode >> 8) & 0x1) == 1;
             var operandSize = OperandSize.Word;
@@ -55,7 +53,7 @@ namespace CPEMUS.Motorola.M68000
             return LogicalArithmeticMemShift(opcode, GetArithmeticShiftResult);
         }
 
-        private uint GetArithmeticShiftResult(uint valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
+        private uint GetArithmeticShiftResult(ulong valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
         {
             int result;
             bool newC;
@@ -75,7 +73,7 @@ namespace CPEMUS.Motorola.M68000
                     }
                 }
 
-                result = (int)valueForShift << count;
+                result = (int)(valueForShift << count);
                 newC = (((valueForShift << (count - 1)) >> ((int)operandSize * 8 - 1)) & 0x1) == 1;
             }
             else
@@ -118,18 +116,23 @@ namespace CPEMUS.Motorola.M68000
             return LogicalArithmeticMemShift(opcode, GetLogicalShiftResult);
         }
 
-        private uint GetLogicalShiftResult(uint valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
+        private uint GetLogicalShiftResult(ulong valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
         {
             uint result;
             bool newC;
-            if (isShiftLeft)
+
+            if (count > (int)operandSize * 8)
             {
-                result = valueForShift << count;
+                result = 0;
+                newC = false;
+            } else if (isShiftLeft)
+            {
+                result = (uint)(valueForShift << count);
                 newC = (((valueForShift << (count - 1)) >> ((int)operandSize * 8 - 1)) & 0x1) == 1;
             }
             else
             {
-                result = valueForShift >> count;
+                result = (uint)(valueForShift >> count);
                 newC = ((valueForShift >> (count - 1)) & 0x1) == 1;
             }
 
@@ -151,7 +154,7 @@ namespace CPEMUS.Motorola.M68000
             bool isCountInReg = ((opcode >> 5) & 0x1) == 1;
             if (isCountInReg)
             {
-                count = (int)_memHelper.Read((uint)count, StoreLocation.DataRegister, operandSize) % 64;
+                count = (int)(Math.Abs(_memHelper.Read((uint)count, StoreLocation.DataRegister, operandSize)) % 64);
             }
             else if (count == 0)
             {
@@ -199,13 +202,14 @@ namespace CPEMUS.Motorola.M68000
             return eaProps.InstructionSize;
         }
 
-        private uint GetRotateResult(uint valueForRotate, int count, bool isRotateLeft, OperandSize operandSize)
+        private uint GetRotateResult(ulong valueForRotate, int count, bool isRotateLeft, OperandSize operandSize)
         {
-            uint result = valueForRotate;
+            ulong result = valueForRotate;
             var operandBitQuantity = (int)operandSize * 8;
             bool newC = false;
             if (count != 0)
             {
+                count %= (int)operandSize * 8;
                 if (isRotateLeft)
                 {
                     result = (valueForRotate << count) | (valueForRotate >> (operandBitQuantity - count));
@@ -219,11 +223,11 @@ namespace CPEMUS.Motorola.M68000
             }
 
             _regs.C = newC;
-            _flagsHelper.AlterZ(result, operandSize);
-            _flagsHelper.AlterN(result, operandSize);
+            _flagsHelper.AlterZ((uint)result, operandSize);
+            _flagsHelper.AlterN((uint)result, operandSize);
             _regs.V = false;
 
-            return result;
+            return (uint)result;
         }
 
         private uint GetRotateWithExtendResult(uint valueForRotate, int count, bool isRotateLeft, OperandSize operandSize)

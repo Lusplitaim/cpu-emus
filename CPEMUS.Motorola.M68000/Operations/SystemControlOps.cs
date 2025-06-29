@@ -26,7 +26,7 @@ namespace CPEMUS.Motorola.M68000
             }
 
             var vectorNumber = (opcode & 0xF) + 32;
-            _exceptionHelper.Raise((uint)vectorNumber);
+            _exceptionHelper.Raise((uint)vectorNumber, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
             return 0;
         }
 
@@ -40,7 +40,7 @@ namespace CPEMUS.Motorola.M68000
 
             if (_regs.V)
             {
-                _exceptionHelper.Raise((uint)ExceptionVectorType.TrapV);
+                _exceptionHelper.Raise((uint)ExceptionVectorType.TrapV, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
                 return 0;
             }
             return INSTR_DEFAULT_SIZE;
@@ -54,7 +54,7 @@ namespace CPEMUS.Motorola.M68000
                 throw new PrivilegeViolationException();
             }
 
-            var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
+            var operand = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word);
 
             _regs.SR = (ushort)(_regs.SR & operand);
 
@@ -64,7 +64,7 @@ namespace CPEMUS.Motorola.M68000
         // AND Immediate to the Condition Code Register.
         private int AndiToCcr(ushort opcode)
         {
-            uint src = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Byte);
+            uint src = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Byte);
             var ccr = _regs.CCR;
 
             byte result = (byte)(src & ccr);
@@ -83,7 +83,7 @@ namespace CPEMUS.Motorola.M68000
                 throw new PrivilegeViolationException();
             }
 
-            var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
+            var operand = (ushort)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.Memory, OperandSize.Word);
 
             _regs.SR = (ushort)(_regs.SR ^ operand);
 
@@ -91,13 +91,9 @@ namespace CPEMUS.Motorola.M68000
         }
 
         // Move from the Status Register.
+        // This instruction is not privileged in MC68000.
         private int MoveFromSr(ushort opcode)
         {
-            if (!IsInSupervisorMode())
-            {
-                throw new PrivilegeViolationException();
-            }
-
             var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
 
             _memHelper.Write(_regs.SR, eaProps.Address, eaProps.Location, OperandSize.Word);
@@ -152,7 +148,7 @@ namespace CPEMUS.Motorola.M68000
                 throw new PrivilegeViolationException();
             }
 
-            var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
+            var operand = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word);
 
             _regs.SR = (ushort)(_regs.SR | operand);
 
@@ -191,7 +187,7 @@ namespace CPEMUS.Motorola.M68000
                 throw new PrivilegeViolationException();
             }
 
-            var operand = _memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word);
+            var operand = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word);
             _regs.SR = (ushort)operand;
 
             Status = M68KStatus.Stopped;
