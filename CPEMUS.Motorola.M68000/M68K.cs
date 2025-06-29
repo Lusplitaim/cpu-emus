@@ -17,7 +17,7 @@ namespace CPEMUS.Motorola.M68000
         private const int ADDA_SFX_1 = 0xD0C0;
         private const int ADDA_SFX_2 = 0xD1C0;
         private const int ADDQ_SFX = 0x5000;
-        private const int ADDX_SFX = 0xD130;
+        private const int ADDX_SFX = 0xD100;
         private const int ASL_ASR_REG_SFX = 0xE000;
         private const int ASL_ASR_MEM_SFX = 0xE0C0;
         private const int BRA_SFX = 0x6000;
@@ -275,7 +275,7 @@ namespace CPEMUS.Motorola.M68000
             }
             catch (M68KException ex)
             {
-                _exceptionHelper.Raise((uint)ex.ExceptionVectorType);
+                _exceptionHelper.Raise(ex);
                 return true;
             }
         }
@@ -313,13 +313,13 @@ namespace CPEMUS.Motorola.M68000
 
         private int Decode0xB(ushort opcode)
         {
-            if ((opcode & CMP_MASK) == CMP_SFX)
-            {
-                return Cmp(opcode);
-            }
             if ((opcode & CMPA_MASK) == CMPA_SFX)
             {
                 return Cmpa(opcode);
+            }
+            if ((opcode & CMP_MASK) == CMP_SFX)
+            {
+                return Cmp(opcode);
             }
             if ((opcode & CMPM_MASK) == CMPM_SFX)
             {
@@ -550,6 +550,10 @@ namespace CPEMUS.Motorola.M68000
             {
                 return Ext(opcode);
             }
+            if ((opcode & JSR_MASK) == JSR_SFX)
+            {
+                return Jsr(opcode);
+            }
             if ((opcode & CHK_MASK) == CHK_SFX)
             {
                 return Chk(opcode);
@@ -561,10 +565,6 @@ namespace CPEMUS.Motorola.M68000
             if ((opcode & JMP_MASK) == JMP_SFX)
             {
                 return Jmp(opcode);
-            }
-            if ((opcode & JSR_MASK) == JSR_SFX)
-            {
-                return Jsr(opcode);
             }
             if ((opcode & LEA_MASK) == LEA_SFX)
             {

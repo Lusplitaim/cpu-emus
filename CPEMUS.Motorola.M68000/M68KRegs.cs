@@ -51,8 +51,16 @@
         // Program Counter.
         public uint PC { get; set; }
 
+        private ushort _sr;
         // Status Register.
-        public ushort SR;
+        public ushort SR
+        {
+            get => _sr;
+            set
+            {
+                _sr = (ushort)(value & 0xF71F);
+            }
+        }
 
         // Condition Code Register.
         // Upper byte is read as all zeroes
@@ -60,7 +68,7 @@
         public byte CCR
         {
             get => (byte)SR;
-            set => SR = (ushort)((SR & 0xFF00) | value);
+            set => SR = (ushort)((SR & 0xFF00) | (value & 0x1F));
         }
 
         #region Flags.

@@ -11,13 +11,13 @@
             // from immediate word next to the opcode.
             if (displacement == 0)
             {
-                displacement = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word, signExtended: true);
+                displacement = (int)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word, signExtended: true);
                 instructionSize += 2;
             }
 
             if (branchRequired(opcode))
             {
-                return (instructionSize, instructionSize + displacement);
+                return (instructionSize, INSTR_DEFAULT_SIZE + displacement);
             }
             return (instructionSize, instructionSize);
         }
@@ -67,12 +67,13 @@
         // Test Condition, Decrement, and Branch.
         private int Dbcc(ushort opcode)
         {
-            var instructionSize = INSTR_DEFAULT_SIZE + 2;
+            //var instructionSize = INSTR_DEFAULT_SIZE + 2;
+            var opcodeSize = INSTR_DEFAULT_SIZE;
 
             var condition = (ConditionCode)((opcode >> 8) & 0xF);
             if (TestCondition(condition))
             {
-                return instructionSize;
+                return opcodeSize + 2;
             }
 
             var operandSize = OperandSize.Word;
@@ -83,11 +84,11 @@
             _memHelper.Write(dataReg, dataRegIdx, StoreLocation.DataRegister, operandSize);
             if ((short)dataReg == -1)
             {
-                return instructionSize;
+                return opcodeSize + 2;
             }
 
-            var displacement = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, operandSize, signExtended: true);
-            return instructionSize + displacement;
+            var displacement = (int)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, operandSize, signExtended: true);
+            return opcodeSize + displacement;
         }
 
         // Set According to Condition.
@@ -125,7 +126,7 @@
                 ConditionCode.Minus => negative,
                 ConditionCode.GreaterOrEqual => negative == overflow,
                 ConditionCode.LessThan => negative != overflow,
-                ConditionCode.GreaterThan => negative = overflow && !zero,
+                ConditionCode.GreaterThan => negative == overflow && !zero,
                 ConditionCode.LessOrEqual => zero || negative != overflow,
                 _ => throw new InvalidOperationException("Condition test is unknown or not supported"),
             };
@@ -142,8 +143,10 @@
         // Jump to Subroutine.
         private int Jsr(ushort opcode)
         {
-            _memHelper.PushStack(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Long);
-            return Jmp(opcode);
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
+            _memHelper.PushStack((uint)(_regs.PC + eaProps.InstructionSize), OperandSize.Long);
+            _regs.PC = eaProps.Address;
+            return 0;
         }
 
         // No Operation.

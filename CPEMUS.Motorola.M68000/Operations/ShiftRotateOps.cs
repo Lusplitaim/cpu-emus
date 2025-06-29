@@ -1,6 +1,4 @@
-﻿using System.Collections.Specialized;
-
-namespace CPEMUS.Motorola.M68000
+﻿namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
@@ -75,7 +73,7 @@ namespace CPEMUS.Motorola.M68000
                     }
                 }
 
-                result = (int)valueForShift << count;
+                result = (int)(valueForShift << count);
                 newC = (((valueForShift << (count - 1)) >> ((int)operandSize * 8 - 1)) & 0x1) == 1;
             }
             else

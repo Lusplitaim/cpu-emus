@@ -67,7 +67,7 @@ namespace CPEMUS.Motorola.M68000
 
             _memHelper.Write(_regs.SP, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
-            int displacement = (int)_memHelper.ReadImmediate(_regs.PC + INSTR_DEFAULT_SIZE, OperandSize.Word, signExtended: true);
+            int displacement = (int)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Word, signExtended: true);
             _regs.SP = (uint)(_regs.SP + displacement);
 
             return INSTR_DEFAULT_SIZE + 2;
