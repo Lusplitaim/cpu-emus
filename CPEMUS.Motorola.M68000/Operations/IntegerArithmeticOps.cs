@@ -227,22 +227,40 @@ namespace CPEMUS.Motorola.M68000
         // Add Extended.
         private int Addx(ushort opcode)
         {
-            return AddxSubx(opcode, (uint srcOperand, uint destOperand) =>
+            return AddxSubx(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
-                return (long)srcOperand + destOperand + (_regs.X ? 1 : 0);
+                uint extendValue = (uint)(_regs.X ? 1 : 0);
+                long result = (long)srcOperand + destOperand + extendValue;
+
+                _flagsHelper.AlterN((uint)result, operandSize);
+                _flagsHelper.AlterZ((uint)result, operandSize, doNotChangeIfZero: true);
+                _flagsHelper.AlterV(destOperand, srcOperand, result, operandSize);
+                _flagsHelper.AlterC(result, operandSize);
+                _regs.X = _regs.C;
+
+                return result;
             });
         }
 
         // Subtract Extended.
         private int Subx(ushort opcode)
         {
-            return AddxSubx(opcode, (uint srcOperand, uint destOperand) =>
+            return AddxSubx(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
-                return destOperand - srcOperand - (_regs.X ? 1 : 0);
+                uint extendValue = (uint)(_regs.X ? 1 : 0);
+                long result = destOperand - srcOperand - extendValue;
+
+                _flagsHelper.AlterN((uint)result, operandSize);
+                _flagsHelper.AlterZ((uint)result, operandSize, doNotChangeIfZero: true);
+                _flagsHelper.AlterVSub(destOperand, srcOperand, result, operandSize);
+                _flagsHelper.AlterCSub(destOperand, srcOperand + extendValue, operandSize);
+                _regs.X = _regs.C;
+
+                return result;
             });
         }
 
-        private int AddxSubx(ushort opcode, Func<uint, uint, long> getResult)
+        private int AddxSubx(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
         {
             var eaMode = ((opcode >> 3) & 0x1) == 0 ? EAMode.DataDirect : EAMode.PredecIndirect;
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
@@ -253,16 +271,8 @@ namespace CPEMUS.Motorola.M68000
             var destRegIdx = (uint)((opcode >> 9) & 0x7);
             var destRegProps = _eaHelper.Get(eaMode, (int)destRegIdx, operandSize);
 
-            long result = getResult(srcRegProps.Operand, destRegProps.Operand);
+            long result = getResult(srcRegProps.Operand, destRegProps.Operand, operandSize);
 
-            // Flags.
-            _flagsHelper.AlterN((uint)result, operandSize);
-            _flagsHelper.AlterZ((uint)result, operandSize, doNotChangeIfZero: true);
-            _flagsHelper.AlterV(destRegProps.Operand, srcRegProps.Operand, result, operandSize);
-            _flagsHelper.AlterC(result, operandSize);
-            _regs.X = _regs.C;
-
-            // Storing.
             _memHelper.Write((uint)result, destRegProps.Address, destRegProps.Location, operandSize);
 
             return destRegProps.InstructionSize;
@@ -424,12 +434,12 @@ namespace CPEMUS.Motorola.M68000
             uint result = ((uint)remainder << 16) | ((uint)quotient & 0xFFFF);
 
             _regs.V = quotient > 0x8000 || quotient < -0x8000;
+            _regs.C = false;
 
             if (!_regs.V)
             {
                 _flagsHelper.AlterN((uint)quotient, OperandSize.Word);
                 _flagsHelper.AlterZ((uint)quotient, OperandSize.Word);
-                _regs.C = false;
 
                 _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
             }
@@ -455,12 +465,12 @@ namespace CPEMUS.Motorola.M68000
             uint result = (remainder << 16) | (quotient & 0xFFFF);
 
             _regs.V = quotient > 0xFFFF;
+            _regs.C = false;
 
             if (!_regs.V)
             {
                 _flagsHelper.AlterN(quotient, OperandSize.Word);
                 _flagsHelper.AlterZ(quotient, OperandSize.Word);
-                _regs.C = false;
 
                 _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
             }

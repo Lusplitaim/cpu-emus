@@ -35,8 +35,7 @@
 
         public void AlterCSub(uint dest, uint src, OperandSize operandSize)
         {
-            var mask = _operandSizeMask[operandSize];
-            _regs.C = (dest & mask) < (src & mask);
+            _regs.C = dest < src;
         }
 
         public void AlterV(uint op1, uint op2, long result, OperandSize operandSize)
@@ -54,9 +53,9 @@
         public void AlterVSub(uint dest, uint src, long result, OperandSize operandSize)
         {
             var mask = _operandSizeMask[operandSize];
-            var destPositive = ((dest & mask) >> ((int)operandSize * 8 - 1)) == 1;
-            var srcPositive = ((src & mask) >> ((int)operandSize * 8 - 1)) == 1;
-            var resultPositive = ((result & mask) >> ((int)operandSize * 8 - 1)) == 1;
+            var destPositive = ((dest & mask) >> ((int)operandSize * 8 - 1)) == 0;
+            var srcPositive = ((src & mask) >> ((int)operandSize * 8 - 1)) == 0;
+            var resultPositive = ((result & mask) >> ((int)operandSize * 8 - 1)) == 0;
 
             _regs.V = srcPositive && !destPositive && resultPositive
                 || !srcPositive && destPositive && !resultPositive;

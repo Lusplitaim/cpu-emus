@@ -20,11 +20,6 @@ namespace CPEMUS.Motorola.M68000
         // Trap.
         private int Trap(ushort opcode)
         {
-            if (!IsInSupervisorMode())
-            {
-                throw new PrivilegeViolationException();
-            }
-
             var vectorNumber = (opcode & 0xF) + 32;
             _exceptionHelper.Raise((uint)vectorNumber, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
             return 0;
@@ -33,11 +28,6 @@ namespace CPEMUS.Motorola.M68000
         // Trap on Overflow.
         private int TrapV(ushort opcode)
         {
-            if (!IsInSupervisorMode())
-            {
-                throw new PrivilegeViolationException();
-            }
-
             if (_regs.V)
             {
                 _exceptionHelper.Raise((uint)ExceptionVectorType.TrapV, newPc: _regs.PC + INSTR_DEFAULT_SIZE);

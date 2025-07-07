@@ -221,7 +221,7 @@ namespace CPEMUS.Motorola.M68000
             {
                 if (_isResetTriggered)
                 {
-                    _exceptionHelper.RaiseReset();
+                    _exceptionHelper.ProcessReset();
                     _isResetTriggered = false;
                     Status = M68KStatus.Running;
                     return true;
@@ -232,13 +232,10 @@ namespace CPEMUS.Motorola.M68000
                     return false;
                 }
 
-                if (_exceptionHelper.HasPendingInterrupts)
+                if (_exceptionHelper.HasAllowedInterrupts && _exceptionHelper.TryProcessInterrupt())
                 {
-                    //if (_exceptionHelper.TryProcessInterrupt())
-                    //{
-                    //    Status = M68KStatus.Running;
-                    //    return true;
-                    //}
+                    Status = M68KStatus.Running;
+                    return true;
                 }
 
                 bool shouldTriggerTracing = _regs.IsTracingEnabled;

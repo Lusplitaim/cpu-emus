@@ -47,6 +47,17 @@
 
         public MPrivilegeMode Mode => (MPrivilegeMode)((SR >> 13) & 0x1);
         public bool IsTracingEnabled => ((SR >> 14) & 0x3) == 2;
+        public int InterruptPriorityLevel => (SR >> 8) & 0x7;
+
+        public void UpdatePriorityLevel(int priorityLevel)
+        {
+            if (priorityLevel < 0 || priorityLevel > 7)
+            {
+                throw new ArgumentOutOfRangeException();
+            }
+
+            SR = (ushort)((SR & 0xF8FF) | (priorityLevel << 8));
+        }
 
         // Program Counter.
         public uint PC { get; set; }

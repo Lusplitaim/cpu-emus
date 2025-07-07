@@ -4,7 +4,10 @@ namespace CPEMUS.Motorola.M68000.Helpers
 {
     internal class ExceptionHelper
     {
-        private readonly Stack<ExceptionVectorType> _pendingInterrupts = new();
+        private const int AUTOVECTOR_NUMBER_OFFSET = 24;
+        private const int MAX_PRIORITY_LEVEL = 7;
+
+        private readonly PriorityQueue<int?, int> _pendingInterrupts = new(Comparer<int>.Create((x, y) => y.CompareTo(x)));
         private readonly M68KRegs _regs;
         private readonly MemHelper _memHelper;
         public ExceptionHelper(M68KRegs regs, MemHelper memHelper)
@@ -13,14 +16,38 @@ namespace CPEMUS.Motorola.M68000.Helpers
             _memHelper = memHelper;
         }
 
-        public bool HasPendingInterrupts => _pendingInterrupts.Count > 0;
+        public bool HasAllowedInterrupts
+        {
+            get
+            {
+                return _pendingInterrupts.TryPeek(out int? _, out int priority)
+                    && (priority > _regs.InterruptPriorityLevel || priority == MAX_PRIORITY_LEVEL);
+            }
+        }
 
-        public void RaiseReset()
+        public bool TryProcessInterrupt()
+        {
+            if (_pendingInterrupts.TryDequeue(out int? vectorNumber, out int priority))
+            {
+                if (priority < _regs.InterruptPriorityLevel)
+                {
+                    _pendingInterrupts.Enqueue(vectorNumber, priority);
+                    return false;
+                }
+
+                uint vectorAddress = (uint)((vectorNumber ?? priority + AUTOVECTOR_NUMBER_OFFSET) * 4);
+                ProcessException(vectorAddress, newPriorityLevel: priority);
+                return true;
+            }
+            return false;
+        }
+
+        public void ProcessReset()
         {
             _regs.SR = default;
             EnterSupervisorMode();
             DisableTracing();
-            DisableInterrupts();
+            UpdateCurrentInterruptLevel(MAX_PRIORITY_LEVEL);
 
             _regs.SP = _memHelper.Read(0x0, StoreLocation.Memory, OperandSize.Long);
             _regs.PC = _memHelper.Read(0x4, StoreLocation.Memory, OperandSize.Long);
@@ -53,11 +80,15 @@ namespace CPEMUS.Motorola.M68000.Helpers
             ProcessException(vectorAddress, newPc);
         }
 
-        private void ProcessException(uint vectorAddress, uint? newPc = null)
+        private void ProcessException(uint vectorAddress, uint? newPc = null, int? newPriorityLevel = null)
         {
             var prevStatusRegister = _regs.SR;
             EnterSupervisorMode();
             DisableTracing();
+            if (newPriorityLevel.HasValue)
+            {
+                UpdateCurrentInterruptLevel(newPriorityLevel.Value);
+            }
 
             _memHelper.PushStack(newPc ?? _regs.PC, OperandSize.Long);
             _memHelper.PushStack(prevStatusRegister, OperandSize.Word);
@@ -75,9 +106,9 @@ namespace CPEMUS.Motorola.M68000.Helpers
             _regs.SR = (ushort)(_regs.SR & 0x3FFF);
         }
 
-        private void DisableInterrupts()
+        private void UpdateCurrentInterruptLevel(int priorityLevel)
         {
-            _regs.SR = (ushort)(_regs.SR | 0x0700);
+            _regs.UpdatePriorityLevel(priorityLevel);
         }
 
         public void Return()

@@ -56,7 +56,7 @@
         private uint GetArithmeticShiftResult(ulong valueForShift, int count, bool isShiftLeft, OperandSize operandSize)
         {
             int result;
-            bool newC;
+            bool newC = false;
             bool newV = false;
             if (isShiftLeft)
             {
@@ -80,19 +80,18 @@
             {
                 result = (int)valueForShift;
                 int initialV = (int)((valueForShift >> ((int)operandSize * 8 - 1)) & 0x1);
+                int initialMsb = (int)((valueForShift >> ((int)operandSize * 8 - 1)) & 0x1);
                 for (int i = 0; i < count; i++)
                 {
-                    result = result >> 1;
+                    var prevResult = result;
+                    result = (result >> 1) | (initialMsb << ((int)operandSize * 8 - 1));
                     int intermediateV = (result >> ((int)operandSize * 8 - 1)) & 0x1;
                     if (intermediateV != initialV)
                     {
                         newV = true;
-                        break;
                     }
+                    newC = (prevResult & 0x1) == 1;
                 }
-
-                result = (int)valueForShift >> count;
-                newC = ((valueForShift >> (count - 1)) & 0x1) == 1;
             }
 
             _regs.X = count == 0 ? _regs.X : newC;
