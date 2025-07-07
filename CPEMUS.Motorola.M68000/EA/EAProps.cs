@@ -6,5 +6,7 @@
         public uint Address;
         public StoreLocation Location;
         public int InstructionSize;
+        public int ClockPeriods;
+        public EAMode Mode;
     }
 }

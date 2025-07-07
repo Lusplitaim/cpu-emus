@@ -9,6 +9,10 @@
         PredecIndirect = 0x4,
         BaseDisplacement = 0x5,
         IndexedAddressing = 0x6,
-        PCAbsoluteImmediate = 0x7,
+        AbsoluteShort = 0x70,
+        AbsoluteLong= 0x71,
+        PCDisplacement16 = 0x72,
+        PCDisplacement8 = 0x73,
+        ImmediateData = 0x74,
     }
 }

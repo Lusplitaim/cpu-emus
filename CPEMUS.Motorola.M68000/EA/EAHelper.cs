@@ -7,6 +7,24 @@ namespace CPEMUS.Motorola.M68000.EA
     internal class EAHelper
     {
         private const int DEFAULT_OPCODE_SIZE = 2;
+        private const int READ_CLOCK_PERIODS = 4;
+
+        private readonly Dictionary<EAMode, (int ReadCyclesShort, int ReadCyclesLong, int AdditionalClockPeriods)> _clockPeriods = new()
+        {
+            { EAMode.DataDirect, (0, 0, 0) },
+            { EAMode.AddressDirect, (0, 0, 0) },
+            { EAMode.AddressIndirect, (1, 2, 0) },
+            { EAMode.PostincIndirect, (1, 2, 0) },
+            { EAMode.PredecIndirect, (1, 2, 2) },
+            { EAMode.BaseDisplacement, (2, 3, 0) },
+            { EAMode.IndexedAddressing, (2, 3, 2) },
+            { EAMode.AbsoluteShort, (2, 3, 0) },
+            { EAMode.AbsoluteLong, (3, 4, 0) },
+            { EAMode.PCDisplacement8, (2, 3, 0) },
+            { EAMode.PCDisplacement16, (2, 3, 2) },
+            { EAMode.ImmediateData, (1, 2, 0) },
+        };
+
         private readonly M68KRegs _regs;
         private readonly MemHelper _memHelper;
         private readonly IList<byte> _mem;
@@ -28,9 +46,12 @@ namespace CPEMUS.Motorola.M68000.EA
         {
             EAProps result = GetProps(opcode, operandSize, opcodeSize);
 
+            (int readCyclesShort, int readCyclesLong, int additionalClockPeriods) = _clockPeriods[result.Mode];
+            result.ClockPeriods += additionalClockPeriods;
             if (loadOperand)
             {
                 result.Operand = _memHelper.Read(result.Address, result.Location, operandSize, signExtended);
+                result.ClockPeriods += (operandSize == OperandSize.Long ? readCyclesLong : readCyclesShort) * READ_CLOCK_PERIODS;
             }
             result.InstructionSize += opcodeSize;
 
@@ -42,6 +63,12 @@ namespace CPEMUS.Motorola.M68000.EA
             uint registerField = (uint)(opcode & 0x7);
             var mode = (EAMode)((opcode >> 3) & 0x7);
             EAProps result;
+
+            if (!Enum.IsDefined(mode))
+            {
+                mode = (EAMode)(((int)mode << 4) | (int)registerField);
+            }
+
             switch (mode)
             {
                 case EAMode.DataDirect: // EA = Dn.
@@ -65,20 +92,26 @@ namespace CPEMUS.Motorola.M68000.EA
                 case EAMode.IndexedAddressing: // EA = [An + displacement8 + Xn.size * scale].
                     result = GetIndexedAddressingVal(ReadAddressReg(registerField), opcodeSize);
                     break;
-                case EAMode.PCAbsoluteImmediate:
-                    result = registerField switch
-                    {
-                        0x0 => GetAbsoluteVal(word: true, opcodeSize),
-                        0x1 => GetAbsoluteVal(word: false, opcodeSize),
-                        0x2 => GetPCDisplaceVal(opcodeSize), // EA = [PC + displacement16].
-                        0x3 => GetIndexedAddressingVal((uint)(_regs.PC + opcodeSize), opcodeSize), // EA = [PC + displacement8 + Xn.size * scale].
-                        0x4 => GetImmediateVal(operandSize, opcodeSize),
-                        _ => throw new IllegalInstructionException(),
-                    };
+                case EAMode.AbsoluteShort:
+                    result = GetAbsoluteVal(word: true, opcodeSize);
+                    break;
+                case EAMode.AbsoluteLong:
+                    result = GetAbsoluteVal(word: false, opcodeSize);
+                    break;
+                case EAMode.PCDisplacement16: // EA = [PC + displacement16].
+                    result = GetPCDisplaceVal(opcodeSize);
+                    break;
+                case EAMode.PCDisplacement8: // EA = [PC + displacement8 + Xn.size * scale].
+                    result = GetIndexedAddressingVal((uint)(_regs.PC + opcodeSize), opcodeSize);
+                    break;
+                case EAMode.ImmediateData:
+                    result = GetImmediateVal(operandSize, opcodeSize);
                     break;
                 default:
                     throw new IllegalInstructionException();
             }
+
+            result.Mode = mode;
 
             return result;
         }
