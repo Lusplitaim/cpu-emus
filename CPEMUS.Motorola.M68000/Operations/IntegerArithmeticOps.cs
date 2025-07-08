@@ -1,11 +1,12 @@
 ﻿using CPEMUS.Motorola.M68000.EA;
+using CPEMUS.Motorola.M68000.Exceptions;
 
 namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
         // Add.
-        private int Add(ushort opcode)
+        private M68KExecResult Add(ushort opcode)
         {
             return AddSub(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
@@ -22,7 +23,7 @@ namespace CPEMUS.Motorola.M68000
         }
 
         // Subtract.
-        private int Sub(ushort opcode)
+        private M68KExecResult Sub(ushort opcode)
         {
             return AddSub(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
@@ -38,7 +39,7 @@ namespace CPEMUS.Motorola.M68000
             });
         }
 
-        private int AddSub(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
+        private M68KExecResult AddSub(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -48,10 +49,16 @@ namespace CPEMUS.Motorola.M68000
             var eaProps = _eaHelper.Get(opcode, operandSize);
             var storeDirection = (StoreDirection)((opcode >> 8) & 0x1);
 
+            int clockPeriods = eaProps.ClockPeriods;
+
             if (storeDirection == StoreDirection.Source)
             {
                 long result = getResult(eaProps.Operand, dataReg, operandSize);
                 _memHelper.Write((uint)result, dataRegIdx, StoreLocation.DataRegister, operandSize);
+                if (operandSize == OperandSize.Long)
+                {
+                    clockPeriods += eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.ImmediateData ? 4 : 2;
+                }
             }
             else
             {
@@ -59,11 +66,16 @@ namespace CPEMUS.Motorola.M68000
                 _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
             }
 
-            return eaProps.InstructionSize;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Add Address.
-        private int Adda(ushort opcode)
+        private M68KExecResult Adda(ushort opcode)
         {
             return AddaSuba(opcode, (uint srcOperand, uint destOperand) =>
             {
@@ -72,7 +84,7 @@ namespace CPEMUS.Motorola.M68000
         }
 
         // Subtract Address.
-        private int Suba(ushort opcode)
+        private M68KExecResult Suba(ushort opcode)
         {
             return AddaSuba(opcode, (uint srcOperand, uint destOperand) =>
             {
@@ -80,7 +92,7 @@ namespace CPEMUS.Motorola.M68000
             });
         }
 
-        private int AddaSuba(ushort opcode, Func<uint, uint, long> getResult)
+        private M68KExecResult AddaSuba(ushort opcode, Func<uint, uint, long> getResult)
         {
             OperandSize operandSize;
             switch ((opcode >> 6) & 0x7)
@@ -106,11 +118,26 @@ namespace CPEMUS.Motorola.M68000
             // Storing.
             _memHelper.Write((uint)result, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+
+            if (operandSize == OperandSize.Long)
+            {
+                clockPeriods += eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.ImmediateData ? 4 : 2;
+            }
+            else
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Add Immediate.
-        private int Addi(ushort opcode)
+        private M68KExecResult Addi(ushort opcode)
         {
             return AddiSubi(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
@@ -127,7 +154,7 @@ namespace CPEMUS.Motorola.M68000
         }
 
         // Subtract Immediate.
-        private int Subi(ushort opcode)
+        private M68KExecResult Subi(ushort opcode)
         {
             return AddiSubi(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
@@ -143,7 +170,7 @@ namespace CPEMUS.Motorola.M68000
             });
         }
 
-        private int AddiSubi(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
+        private M68KExecResult AddiSubi(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -157,11 +184,21 @@ namespace CPEMUS.Motorola.M68000
             // Storing.
             _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect && operandSize == OperandSize.Long)
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Add Quick.
-        private int Addq(ushort opcode)
+        private M68KExecResult Addq(ushort opcode)
         {
             return AddqSubq(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize, bool isAllowedToChangeFlags) =>
             {
@@ -177,11 +214,11 @@ namespace CPEMUS.Motorola.M68000
                 }
 
                 return result;
-            });
+            }, isSubq: false);
         }
 
         // Subtract Quick.
-        private int Subq(ushort opcode)
+        private M68KExecResult Subq(ushort opcode)
         {
             return AddqSubq(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize, bool isAllowedToChangeFlags) =>
             {
@@ -197,10 +234,10 @@ namespace CPEMUS.Motorola.M68000
                 }
 
                 return result;
-            });
+            }, isSubq: true);
         }
 
-        private int AddqSubq(ushort opcode, Func<uint, uint, OperandSize, bool, long> getResult)
+        private M68KExecResult AddqSubq(ushort opcode, Func<uint, uint, OperandSize, bool, long> getResult, bool isSubq)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -221,11 +258,22 @@ namespace CPEMUS.Motorola.M68000
             // Storing.
             _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if ((eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.AddressDirect)
+                && (operandSize == OperandSize.Long || isSubq))
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Add Extended.
-        private int Addx(ushort opcode)
+        private M68KExecResult Addx(ushort opcode)
         {
             return AddxSubx(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
@@ -243,7 +291,7 @@ namespace CPEMUS.Motorola.M68000
         }
 
         // Subtract Extended.
-        private int Subx(ushort opcode)
+        private M68KExecResult Subx(ushort opcode)
         {
             return AddxSubx(opcode, (uint srcOperand, uint destOperand, OperandSize operandSize) =>
             {
@@ -260,7 +308,7 @@ namespace CPEMUS.Motorola.M68000
             });
         }
 
-        private int AddxSubx(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
+        private M68KExecResult AddxSubx(ushort opcode, Func<uint, uint, OperandSize, long> getResult)
         {
             var eaMode = ((opcode >> 3) & 0x1) == 0 ? EAMode.DataDirect : EAMode.PredecIndirect;
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
@@ -275,10 +323,20 @@ namespace CPEMUS.Motorola.M68000
 
             _memHelper.Write((uint)result, destRegProps.Address, destRegProps.Location, operandSize);
 
-            return destRegProps.InstructionSize;
+            int clockPeriods = operandSize == OperandSize.Long ? 4 : 0;
+            if (eaMode != EAMode.DataDirect)
+            {
+                clockPeriods = 2;
+            }
+
+            return new()
+            {
+                InstructionSize = destRegProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
-        private int Mulu(ushort opcode)
+        private M68KExecResult Mulu(ushort opcode)
         {
             var destRegIdx = (uint)((opcode >> 9) & 0x7);
             uint destReg = _memHelper.Read(destRegIdx, StoreLocation.DataRegister, OperandSize.Word);
@@ -293,10 +351,17 @@ namespace CPEMUS.Motorola.M68000
             _regs.V = false;
             _regs.C = false;
 
-            return eaProps.InstructionSize;
+            // NOTE: timing has best- and worst-case cases, check docs.
+            int clockPeriods = eaProps.ClockPeriods + 66;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
-        private int Muls(ushort opcode)
+        private M68KExecResult Muls(ushort opcode)
         {
             var destRegIdx = (uint)((opcode >> 9) & 0x7);
             int destReg = (int)_memHelper.Read(destRegIdx, StoreLocation.DataRegister, OperandSize.Word, signExtended: true);
@@ -311,11 +376,18 @@ namespace CPEMUS.Motorola.M68000
             _regs.V = false;
             _regs.C = false;
 
-            return eaProps.InstructionSize;
+            // NOTE: timing has best- and worst-case cases, check docs.
+            int clockPeriods = eaProps.ClockPeriods + 66;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Clear an Operand.
-        private int Clr(ushort opcode)
+        private M68KExecResult Clr(ushort opcode)
         {
             _regs.N = false;
             _regs.Z = true;
@@ -327,7 +399,17 @@ namespace CPEMUS.Motorola.M68000
 
             _memHelper.Write(0, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (operandSize == OperandSize.Long && (eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.AddressDirect))
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         private void Compare(uint dest, uint src, OperandSize operandSize)
@@ -341,7 +423,7 @@ namespace CPEMUS.Motorola.M68000
         }
 
         // Compare.
-        private int Cmp(ushort opcode)
+        private M68KExecResult Cmp(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -352,11 +434,21 @@ namespace CPEMUS.Motorola.M68000
 
             Compare(dataReg, eaProps.Operand, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (operandSize == OperandSize.Long)
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Compare Address.
-        private int Cmpa(ushort opcode)
+        private M68KExecResult Cmpa(ushort opcode)
         {
             OperandSize operandSize;
             switch ((opcode >> 6) & 0x7)
@@ -380,11 +472,17 @@ namespace CPEMUS.Motorola.M68000
 
             Compare(addrReg, eaProps.Operand, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods + 2;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Compare Immediate.
-        private int Cmpi(ushort opcode)
+        private M68KExecResult Cmpi(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -395,29 +493,44 @@ namespace CPEMUS.Motorola.M68000
 
             Compare(eaProps.Operand, (uint)immediateOperand, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect && operandSize == OperandSize.Long)
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
-
         // Compare Memory.
-        private int Cmpm(ushort opcode)
+        private M68KExecResult Cmpm(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var eaMode = EAMode.PostincIndirect;
 
             var srcOperandIdx = opcode & 0x7;
-            var srcOperand = _eaHelper.Get(eaMode, srcOperandIdx, operandSize);
+            var srcEaProps = _eaHelper.Get(eaMode, srcOperandIdx, operandSize);
 
             var destOperandIdx = (opcode >> 9) & 0x7;
-            var destOperand = _eaHelper.Get(eaMode, destOperandIdx, operandSize);
+            var destEaProps = _eaHelper.Get(eaMode, destOperandIdx, operandSize);
 
-            Compare(destOperand.Operand, srcOperand.Operand, operandSize);
+            Compare(destEaProps.Operand, srcEaProps.Operand, operandSize);
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = srcEaProps.ClockPeriods + destEaProps.ClockPeriods;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Signed Divide.
-        private int Divs(ushort opcode)
+        private M68KExecResult Divs(ushort opcode)
         {
             uint dataRegIdx = (uint)((opcode >> 9) & 0x7);
             int dividend = (int)_memHelper.Read(dataRegIdx, StoreLocation.DataRegister, OperandSize.Long, signExtended: true);
@@ -426,7 +539,7 @@ namespace CPEMUS.Motorola.M68000
             int divisor = (int)eaProps.Operand;
             if (divisor == 0)
             {
-                throw new InvalidOperationException("Divisor cannot be zero");
+                throw new IntegerDivideByZeroException(eaProps.ClockPeriods);
             }
 
             int quotient = dividend / divisor;
@@ -444,11 +557,17 @@ namespace CPEMUS.Motorola.M68000
                 _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
             }
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods + 154;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Unsigned Divide.
-        private int Divu(ushort opcode)
+        private M68KExecResult Divu(ushort opcode)
         {
             uint dataRegIdx = (uint)((opcode >> 9) & 0x7);
             uint dividend = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
@@ -457,7 +576,7 @@ namespace CPEMUS.Motorola.M68000
             uint divisor = eaProps.Operand;
             if (divisor == 0)
             {
-                throw new InvalidOperationException("Divisor cannot be zero");
+                throw new IntegerDivideByZeroException(eaProps.ClockPeriods);
             }
 
             uint quotient = dividend / divisor;
@@ -475,11 +594,17 @@ namespace CPEMUS.Motorola.M68000
                 _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
             }
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods + 136;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Sign-Extend.
-        private int Ext(ushort opcode)
+        private M68KExecResult Ext(ushort opcode)
         {
             OperandSize regSize;
             OperandSize extSize;
@@ -507,11 +632,17 @@ namespace CPEMUS.Motorola.M68000
             _flagsHelper.AlterZ(result, regSize);
             _regs.C = _regs.V = false;
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = 0;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Negate, Negate with Extend.
-        private int Neg(ushort opcode, bool includeExtend)
+        private M68KExecResult Neg(ushort opcode, bool includeExtend)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var eaProps = _eaHelper.Get(opcode, operandSize);
@@ -538,7 +669,17 @@ namespace CPEMUS.Motorola.M68000
                 _regs.X = _regs.C = result != 0;
             }
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (operandSize == OperandSize.Long && (eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.AddressDirect))
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
     }
 }

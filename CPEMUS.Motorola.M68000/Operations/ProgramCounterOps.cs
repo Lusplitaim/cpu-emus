@@ -1,8 +1,10 @@
-﻿namespace CPEMUS.Motorola.M68000
+﻿using CPEMUS.Motorola.M68000.EA;
+
+namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        private (int instructionSize, int pcDisplacement) BranchWithInternalDisplacement(ushort opcode, Func<ushort, bool> branchRequired)
+        private (int instructionSize, int pcDisplacement, bool isBranchTaken) BranchWithInternalDisplacement(ushort opcode, Func<ushort, bool> branchRequired)
         {
             int instructionSize = INSTR_DEFAULT_SIZE;
             int displacement = (sbyte)opcode;
@@ -17,15 +19,15 @@
 
             if (branchRequired(opcode))
             {
-                return (instructionSize, INSTR_DEFAULT_SIZE + displacement);
+                return (instructionSize, INSTR_DEFAULT_SIZE + displacement, true);
             }
-            return (instructionSize, instructionSize);
+            return (instructionSize, instructionSize, false);
         }
 
         // Branch Conditionally.
-        private int Bcc(ushort opcode)
+        private M68KExecResult Bcc(ushort opcode)
         {
-            (int _, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (opcode) =>
+            (int _, int pcDisplacement, bool isBranchTaken) = BranchWithInternalDisplacement(opcode, (opcode) =>
             {
                 var condition = (ConditionCode)((opcode >> 8) & 0xF);
                 if (condition == ConditionCode.True || condition == ConditionCode.False)
@@ -35,24 +37,36 @@
                 return TestCondition(condition);
             });
 
-            return pcDisplacement;
+            int clockPeriods = isBranchTaken ? 2 : 4;
+
+            return new()
+            {
+                InstructionSize = pcDisplacement,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Branch Always.
-        private int Bra(ushort opcode)
+        private M68KExecResult Bra(ushort opcode)
         {
-            (int _, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (_) =>
+            (int _, int pcDisplacement, bool _) = BranchWithInternalDisplacement(opcode, (_) =>
             {
                 return true;
             });
 
-            return pcDisplacement;
+            int clockPeriods = 2;
+
+            return new()
+            {
+                InstructionSize = pcDisplacement,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Branch to Subroutine.
-        private int Bsr(ushort opcode)
+        private M68KExecResult Bsr(ushort opcode)
         {
-            (int instructionSize, int pcDisplacement) = BranchWithInternalDisplacement(opcode, (_) =>
+            (int instructionSize, int pcDisplacement, bool _) = BranchWithInternalDisplacement(opcode, (_) =>
             {
                 return true;
             });
@@ -61,19 +75,31 @@
             // to stack.
             _memHelper.PushStack((uint)(_regs.PC + instructionSize), OperandSize.Long);
 
-            return pcDisplacement;
+            int clockPeriods = 2;
+
+            return new()
+            {
+                InstructionSize = pcDisplacement,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Test Condition, Decrement, and Branch.
-        private int Dbcc(ushort opcode)
+        private M68KExecResult Dbcc(ushort opcode)
         {
-            //var instructionSize = INSTR_DEFAULT_SIZE + 2;
             var opcodeSize = INSTR_DEFAULT_SIZE;
+            int clockPeriods = 2;
 
             var condition = (ConditionCode)((opcode >> 8) & 0xF);
-            if (TestCondition(condition))
+            bool isConditionTrue = TestCondition(condition);
+            if (isConditionTrue)
             {
-                return opcodeSize + 2;
+                clockPeriods = 4;
+                return new()
+                {
+                    InstructionSize = opcodeSize + 2,
+                    ClockPeriods = clockPeriods,
+                };
             }
 
             var operandSize = OperandSize.Word;
@@ -84,23 +110,43 @@
             _memHelper.Write(dataReg, dataRegIdx, StoreLocation.DataRegister, operandSize);
             if ((short)dataReg == -1)
             {
-                return opcodeSize + 2;
+                return new()
+                {
+                    InstructionSize = opcodeSize + 2,
+                    ClockPeriods = clockPeriods,
+                };
             }
 
             var displacement = (int)_memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, operandSize, signExtended: true);
-            return opcodeSize + displacement;
+
+            return new()
+            {
+                InstructionSize = opcodeSize + displacement,
+                ClockPeriods = clockPeriods,
+            };
         }
 
         // Set According to Condition.
-        private int Scc(ushort opcode)
+        private M68KExecResult Scc(ushort opcode)
         {
             var eaProps = _eaHelper.Get(opcode, OperandSize.Byte);
 
             var condition = (ConditionCode)((opcode >> 8) & 0xF);
-            int result = TestCondition(condition) ? -1 : 0;
+            bool isTrue = TestCondition(condition);
+            int result = isTrue ? -1 : 0;
             _memHelper.Write((uint)result, eaProps.Address, eaProps.Location, OperandSize.Byte);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (isTrue && (eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.AddressDirect))
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods,
+            };
         }
 
         private bool TestCondition(ConditionCode condition)
@@ -132,31 +178,72 @@
             };
         }
 
-        // Jump.
-        private int Jmp(ushort opcode)
+        private Dictionary<EAMode, int> _jpmClockPeriods = new()
         {
-            var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
+            { EAMode.AddressIndirect, 8 },
+            { EAMode.BaseDisplacement16, 10 },
+            { EAMode.IndexedAddressing, 14 },
+            { EAMode.AbsoluteShort, 10 },
+            { EAMode.AbsoluteLong, 12 },
+            { EAMode.PCDisplacement16, 10 },
+            { EAMode.PCDisplacement8, 14 },
+        };
+        // Jump.
+        private M68KExecResult Jmp(ushort opcode)
+        {
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Long, loadOperand: false);
             _regs.PC = eaProps.Address;
-            return 0;
+            int clockPeriods = _jpmClockPeriods[eaProps.Mode];
+            bool isTotalCycleCount = true;
+
+            return new()
+            {
+                InstructionSize = 0,
+                ClockPeriods = clockPeriods,
+                IsTotalCycleCount = isTotalCycleCount
+            };
         }
 
-        // Jump to Subroutine.
-        private int Jsr(ushort opcode)
+        private Dictionary<EAMode, int> _jsrClockPeriods = new()
         {
-            var eaProps = _eaHelper.Get(opcode, OperandSize.Long);
+            { EAMode.AddressIndirect, 16 },
+            { EAMode.BaseDisplacement16, 18 },
+            { EAMode.IndexedAddressing, 22 },
+            { EAMode.AbsoluteShort, 18 },
+            { EAMode.AbsoluteLong, 20 },
+            { EAMode.PCDisplacement16, 18 },
+            { EAMode.PCDisplacement8, 22 },
+        };
+        // Jump to Subroutine.
+        private M68KExecResult Jsr(ushort opcode)
+        {
+            var eaProps = _eaHelper.Get(opcode, OperandSize.Long, loadOperand: false);
             _memHelper.PushStack((uint)(_regs.PC + eaProps.InstructionSize), OperandSize.Long);
             _regs.PC = eaProps.Address;
-            return 0;
+            int clockPeriods = _jsrClockPeriods[eaProps.Mode];
+            bool isTotalCycleCount = true;
+
+            return new()
+            {
+                InstructionSize = 0,
+                ClockPeriods = clockPeriods,
+                IsTotalCycleCount = isTotalCycleCount
+            };
         }
 
         // No Operation.
-        private int Nop(ushort opcode)
+        private M68KExecResult Nop(ushort opcode)
         {
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = 0;
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods,
+            };
         }
 
         // Return and Restore Condition Codes.
-        private int Rtr(ushort opcode)
+        private M68KExecResult Rtr(ushort opcode)
         {
             var sr = _memHelper.PopStack(OperandSize.Word);
             _regs.CCR = (byte)sr;
@@ -164,20 +251,36 @@
             var pc = _memHelper.PopStack(OperandSize.Long);
             _regs.PC = pc;
 
-            return 0;
+            int clockPeriods = 20;
+            bool isTotalPeriods = true;
+
+            return new()
+            {
+                InstructionSize = 0,
+                ClockPeriods = clockPeriods,
+                IsTotalCycleCount = isTotalPeriods,
+            };
         }
 
         // Return from Subroutine.
-        private int Rts(ushort opcode)
+        private M68KExecResult Rts(ushort opcode)
         {
             var pc = _memHelper.PopStack(OperandSize.Long);
             _regs.PC = pc;
 
-            return 0;
+            int clockPeriods = 16;
+            bool isTotalPeriods = true;
+
+            return new()
+            {
+                InstructionSize = 0,
+                ClockPeriods = clockPeriods,
+                IsTotalCycleCount = isTotalPeriods,
+            };
         }
 
         // Test an Operand.
-        private int Tst(ushort opcode)
+        private M68KExecResult Tst(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var eaProps = _eaHelper.Get(opcode, operandSize);
@@ -186,7 +289,13 @@
             _flagsHelper.AlterZ(eaProps.Operand, operandSize);
             _regs.V = _regs.C = false;
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods,
+            };
         }
     }
 

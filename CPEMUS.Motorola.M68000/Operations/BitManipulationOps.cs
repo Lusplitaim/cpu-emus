@@ -4,7 +4,7 @@ namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        private int TestAndChangeBit(ushort opcode, bool srcImmediate, bool updateDestValue, Func<uint, int, uint> changeBit)
+        private (int instrSize, EAProps eaProps) TestAndChangeBit(ushort opcode, bool srcImmediate, bool updateDestValue, Func<uint, int, uint> changeBit)
         {
             var mode = (EAMode)((opcode >> 3) & 0x7);
             var operandSize = mode == EAMode.DataDirect ? OperandSize.Long : OperandSize.Byte;
@@ -32,42 +32,90 @@ namespace CPEMUS.Motorola.M68000
                 _memHelper.Write(result, eaResult.Address, eaResult.Location, operandSize);
             }
 
-            return eaResult.InstructionSize;
+            return (eaResult.InstructionSize, eaResult);
         }
 
         // Test Bit and Change.
-        private int Bchg(ushort opcode, bool srcImmediate)
+        private M68KExecResult Bchg(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
+            (int instrSize, EAProps eaProps) = TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
             {
                 return (uint)(operand ^ (1 << bitNumber));
             });
+
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect)
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = instrSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Test Bit and Clear.
-        private int Bclr(ushort opcode, bool srcImmediate)
+        private M68KExecResult Bclr(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
+            (int instrSize, EAProps eaProps) = TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
             {
                 return (uint)(operand & ~(1 << bitNumber));
             });
+
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect)
+            {
+                clockPeriods += 6;
+            }
+
+            return new()
+            {
+                InstructionSize = instrSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Test Bit and Set.
-        private int Bset(ushort opcode, bool srcImmediate)
+        private M68KExecResult Bset(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
+            (int instrSize, EAProps eaProps) = TestAndChangeBit(opcode, srcImmediate, updateDestValue: true, (operand, bitNumber) =>
             {
                 return operand | (uint)(1 << bitNumber);
             });
+
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect)
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = instrSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
-        private int Btst(ushort opcode, bool srcImmediate)
+        private M68KExecResult Btst(ushort opcode, bool srcImmediate)
         {
-            return TestAndChangeBit(opcode, srcImmediate, updateDestValue: false, (operand, bitNumber) =>
+            (int instrSize, EAProps eaProps) = TestAndChangeBit(opcode, srcImmediate, updateDestValue: false, (operand, bitNumber) =>
             {
                 return operand;
             });
+
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect)
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = instrSize,
+                ClockPeriods = clockPeriods
+            };
         }
     }
 }

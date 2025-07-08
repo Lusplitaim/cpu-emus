@@ -214,28 +214,30 @@ namespace CPEMUS.Motorola.M68000
             _exceptionHelper = new(_regs, _memHelper);
         }
 
-        public bool Run()
+        public int Run()
         {
             ushort opcode;
+            _memHelper.ClearCycleCount();
+            int totalCycleCount = default;
             try
             {
                 if (_isResetTriggered)
                 {
-                    _exceptionHelper.ProcessReset();
+                    var resetCyclePeriods = _exceptionHelper.ProcessReset();
                     _isResetTriggered = false;
                     Status = M68KStatus.Running;
-                    return true;
+                    return resetCyclePeriods;
                 }
 
                 if (Status == M68KStatus.Halted)
                 {
-                    return false;
+                    return 0;
                 }
 
-                if (_exceptionHelper.HasAllowedInterrupts && _exceptionHelper.TryProcessInterrupt())
+                if (_exceptionHelper.HasAllowedInterrupts && _exceptionHelper.TryProcessInterrupt(out var interruptClockPeriods))
                 {
                     Status = M68KStatus.Running;
-                    return true;
+                    return interruptClockPeriods;
                 }
 
                 bool shouldTriggerTracing = _regs.IsTracingEnabled;
@@ -244,16 +246,20 @@ namespace CPEMUS.Motorola.M68000
                 {
                     opcode = (ushort)_memHelper.Read(_regs.PC, StoreLocation.Memory, OperandSize.Word);
 
-                    var instructionSize = DecodeOpcode(opcode);
+                    var instrExecResult = Execute(opcode);
 
-                    _regs.PC += (uint)instructionSize;
+                    _regs.PC += (uint)instrExecResult.InstructionSize;
+
+                    totalCycleCount += instrExecResult.IsTotalCycleCount
+                        ? instrExecResult.ClockPeriods
+                        : instrExecResult.ClockPeriods + _memHelper.ReadWriteCycles;
                 }
 
                 // Address in Program Counter should not be odd.
                 if (Status == M68KStatus.Running && (_regs.PC % 2) != 0)
                 {
-                    _exceptionHelper.Raise((uint)ExceptionVectorType.AddressError);
-                    return true;
+                    totalCycleCount += _exceptionHelper.Raise((uint)ExceptionVectorType.AddressError);
+                    return totalCycleCount;
                 }
 
                 // If the tracing is enabled at the beginning of an instruction
@@ -268,12 +274,11 @@ namespace CPEMUS.Motorola.M68000
                     return true;
                 }*/
 
-                return true;
+                return totalCycleCount;
             }
             catch (M68KException ex)
             {
-                _exceptionHelper.Raise(ex);
-                return true;
+                return _exceptionHelper.Raise(ex);
             }
         }
 
@@ -282,9 +287,9 @@ namespace CPEMUS.Motorola.M68000
             _isResetTriggered = true;
         }
 
-        public int DecodeOpcode(ushort opcode)
+        private M68KExecResult Execute(ushort opcode)
         {
-            int? pcDisplacement = (opcode & 0xF000) switch
+            M68KExecResult? execResult = (opcode & 0xF000) switch
             {
                 0x0000 => Decode0x0(opcode),
                 0x4000 => Decode0x4(opcode),
@@ -300,15 +305,15 @@ namespace CPEMUS.Motorola.M68000
                 _ => null
             };
 
-            if (pcDisplacement == null && (opcode & 0xC000) == 0x0000)
+            if (execResult == null && (opcode & 0xC000) == 0x0000)
             {
-                pcDisplacement = Decode0x0(opcode);
+                execResult = Decode0x0(opcode);
             }
 
-            return pcDisplacement ?? throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported");
+            return execResult ?? throw new InvalidOperationException($"The opcode {Convert.ToString(opcode, 16)} is unknown or not supported");
         }
 
-        private int Decode0xB(ushort opcode)
+        private M68KExecResult Decode0xB(ushort opcode)
         {
             if ((opcode & CMPA_MASK) == CMPA_SFX)
             {
@@ -329,7 +334,7 @@ namespace CPEMUS.Motorola.M68000
             throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
-        private int Decode0xC(ushort opcode)
+        private M68KExecResult Decode0xC(ushort opcode)
         {
             if ((opcode & MULU_MASK) == MULU_SFX)
             {
@@ -353,7 +358,7 @@ namespace CPEMUS.Motorola.M68000
             }
         }
 
-        private int Decode0xD(ushort opcode)
+        private M68KExecResult Decode0xD(ushort opcode)
         {
             bool isAdda = (opcode & ADDA_MASK) == ADDA_SFX_1
                 || (opcode & ADDA_MASK) == ADDA_SFX_2;
@@ -368,7 +373,7 @@ namespace CPEMUS.Motorola.M68000
             return Add(opcode);
         }
 
-        private int Decode0xE(ushort opcode)
+        private M68KExecResult Decode0xE(ushort opcode)
         {
             if ((opcode & ASL_ASR_MEM_MASK) == ASL_ASR_MEM_SFX)
             {
@@ -406,7 +411,7 @@ namespace CPEMUS.Motorola.M68000
             throw new NotImplementedException();
         }
 
-        private int? Decode0x0(ushort opcode)
+        private M68KExecResult? Decode0x0(ushort opcode)
         {
             if ((opcode & ANDI_TO_CCR_MASK) == ANDI_TO_CCR_SFX)
             {
@@ -509,7 +514,7 @@ namespace CPEMUS.Motorola.M68000
             return null;
         }
 
-        private int Decode0x4(ushort opcode)
+        private M68KExecResult Decode0x4(ushort opcode)
         {
             if ((opcode & RESET_MASK) == RESET_SFX)
             {
@@ -634,7 +639,7 @@ namespace CPEMUS.Motorola.M68000
             throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
-        private int Decode0x5(ushort opcode)
+        private M68KExecResult Decode0x5(ushort opcode)
         {
             if ((opcode & DBCC_MASK) == DBCC_SFX)
             {
@@ -655,7 +660,7 @@ namespace CPEMUS.Motorola.M68000
             throw new NotImplementedException();
         }
 
-        private int Decode0x6(ushort opcode)
+        private M68KExecResult Decode0x6(ushort opcode)
         {
             if ((opcode & BRA_MASK) == BRA_SFX)
             {
@@ -668,7 +673,7 @@ namespace CPEMUS.Motorola.M68000
             return Bcc(opcode);
         }
 
-        private int Decode0x7(ushort opcode)
+        private M68KExecResult Decode0x7(ushort opcode)
         {
             if ((opcode & MOVEQ_MASK) == MOVEQ_SFX)
             {
@@ -677,7 +682,7 @@ namespace CPEMUS.Motorola.M68000
             throw new NotImplementedException("The operation is unknown or not implemented");
         }
 
-        private int Decode0x8(ushort opcode)
+        private M68KExecResult Decode0x8(ushort opcode)
         {
             if ((opcode & DIVS_MASK) == DIVS_SFX)
             {
@@ -694,7 +699,7 @@ namespace CPEMUS.Motorola.M68000
             return Or(opcode);
         }
 
-        private int Decode0x9(ushort opcode)
+        private M68KExecResult Decode0x9(ushort opcode)
         {
             if ((opcode & SUBA_MASK) == SUBA_SFX_1
                 || (opcode & SUBA_MASK) == SUBA_SFX_2)

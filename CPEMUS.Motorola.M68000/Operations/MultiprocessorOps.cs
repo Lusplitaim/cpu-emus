@@ -2,7 +2,7 @@
 {
     public partial class M68K
     {
-        private int Tas(ushort opcode)
+        private M68KExecResult Tas(ushort opcode)
         {
             throw new NotImplementedException();
         }

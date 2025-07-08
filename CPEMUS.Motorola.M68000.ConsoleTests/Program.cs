@@ -6,7 +6,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
     {
         static void Main(string[] args)
         {
-            var filePath = "C:\\m68k-tests\\SUBX.b.json";
+            var filePath = "C:\\m68k-tests\\STOP.json";
 
             using var streamReader = File.OpenText(filePath);
 
@@ -29,9 +29,9 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
                 var testCase = testCases[testCaseIdx.Value];
 
                 var cpu = CpuTest.ToM68K(testCase.Initial);
-                cpu.Run();
+                var clocks = cpu.Run();
                 var expected = CpuTest.ToM68K(testCase.Final);
-                if (!CpuTest.Assert(cpu, expected))
+                if (!CpuTest.Assert(cpu, expected, clocks, testCase.Length))
                 {
                     Console.WriteLine($"Failed on {testCaseIdx.Value} test case: {testCase.Name}");
                     return;
@@ -55,9 +55,9 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
                     var testCase = cpuTests[i];
 
                     var cpu = CpuTest.ToM68K(testCase.Initial);
-                    cpu.Run();
+                    var clocks = cpu.Run();
                     var expected = CpuTest.ToM68K(testCase.Final);
-                    if (!CpuTest.Assert(cpu, expected))
+                    if (!CpuTest.Assert(cpu, expected, clocks, testCase.Length))
                     {
                         Console.WriteLine($"Failed on {i} test case: {testCase.Name}");
                         return;

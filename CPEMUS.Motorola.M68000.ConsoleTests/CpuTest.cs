@@ -43,7 +43,7 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             return new(memTest, regs);
         }
 
-        public static bool Assert(M68K actual, M68K expected)
+        public static bool Assert(M68K actual, M68K expected, int actualClocks, int expectedClocks)
         {
             bool memIdentical = CompareMemory(actual.Memory, expected.Memory);
             bool dataRegsIdentical = actual.Registers.D.SequenceEqual(expected.Registers.D);
@@ -52,9 +52,10 @@ namespace CPEMUS.Motorola.M68000.ConsoleTests
             bool sspIdentical = actual.Registers.SSP == expected.Registers.SSP;
             bool srIdentical = actual.Registers.SR == expected.Registers.SR;
             bool pcIdentical = actual.Registers.PC == expected.Registers.PC;
+            bool clocksIdentical = actualClocks == expectedClocks;
 
             return memIdentical && dataRegsIdentical && addressRegsIdentical
-                && uspIdentical && sspIdentical && srIdentical && pcIdentical;
+                && uspIdentical && sspIdentical && srIdentical && pcIdentical & clocksIdentical;
         }
 
         private static bool CompareMemory(ICollection<byte> first, ICollection<byte> second)

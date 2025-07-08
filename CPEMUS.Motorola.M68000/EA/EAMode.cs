@@ -7,7 +7,7 @@
         AddressIndirect = 0x2,
         PostincIndirect = 0x3,
         PredecIndirect = 0x4,
-        BaseDisplacement = 0x5,
+        BaseDisplacement16 = 0x5,
         IndexedAddressing = 0x6,
         AbsoluteShort = 0x70,
         AbsoluteLong= 0x71,

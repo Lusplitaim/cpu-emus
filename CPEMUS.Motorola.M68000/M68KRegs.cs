@@ -45,6 +45,16 @@
             }
         }
 
+        public void IncreaseSP(OperandSize operandSize)
+        {
+            SP += Math.Max((uint)operandSize, (uint)OperandSize.Word);
+        }
+
+        public void DecreaseSP(OperandSize operandSize)
+        {
+            SP -= Math.Max((uint)operandSize, (uint)OperandSize.Word);
+        }
+
         public MPrivilegeMode Mode => (MPrivilegeMode)((SR >> 13) & 0x1);
         public bool IsTracingEnabled => ((SR >> 14) & 0x3) == 2;
         public int InterruptPriorityLevel => (SR >> 8) & 0x7;

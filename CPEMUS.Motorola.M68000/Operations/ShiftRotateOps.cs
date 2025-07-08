@@ -1,8 +1,10 @@
-﻿namespace CPEMUS.Motorola.M68000
+﻿using CPEMUS.Motorola.M68000.EA;
+
+namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
-        private int LogicalArithmeticRegShift(ushort opcode, Func<ulong, int, bool, OperandSize, uint> getShiftResult)
+        private M68KExecResult LogicalArithmeticRegShift(ushort opcode, Func<ulong, int, bool, OperandSize, uint> getShiftResult)
         {
             var count = (uint)((opcode >> 9) & 0x7);
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
@@ -25,10 +27,16 @@
 
             _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, operandSize);
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = (int)((operandSize == OperandSize.Long ? 4 : 2) + 2 * count);
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
 
-        private int LogicalArithmeticMemShift(ushort opcode, Func<ulong, int, bool, OperandSize, uint> getShiftResult)
+        private M68KExecResult LogicalArithmeticMemShift(ushort opcode, Func<ulong, int, bool, OperandSize, uint> getShiftResult)
         {
             bool isShiftLeft = ((opcode >> 8) & 0x1) == 1;
             var operandSize = OperandSize.Word;
@@ -38,17 +46,23 @@
 
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Arithmetic Shift Register Left/Right.
-        private int AslAsrRegShift(ushort opcode)
+        private M68KExecResult AslAsrRegShift(ushort opcode)
         {
             return LogicalArithmeticRegShift(opcode, GetArithmeticShiftResult);
         }
 
         // Arithmetic Shift Memory Left/Right.
-        private int AslAsrMemShift(ushort opcode)
+        private M68KExecResult AslAsrMemShift(ushort opcode)
         {
             return LogicalArithmeticMemShift(opcode, GetArithmeticShiftResult);
         }
@@ -104,13 +118,13 @@
         }
 
         // Arithmetic Shift Left/Right, Register Shift.
-        private int LslLsrRegShift(ushort opcode)
+        private M68KExecResult LslLsrRegShift(ushort opcode)
         {
             return LogicalArithmeticRegShift(opcode, GetLogicalShiftResult);
         }
 
         // Arithmetic Shift Left/Right, Memory Shift.
-        private int LslLsrMemShift(ushort opcode)
+        private M68KExecResult LslLsrMemShift(ushort opcode)
         {
             return LogicalArithmeticMemShift(opcode, GetLogicalShiftResult);
         }
@@ -145,7 +159,7 @@
         }
 
         // Rotate Register Data.
-        private int RolRorRegRotate(ushort opcode, bool withExtend)
+        private M68KExecResult RolRorRegRotate(ushort opcode, bool withExtend)
         {
             var count = (opcode >> 9) & 0x7;
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
@@ -176,11 +190,17 @@
 
             _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, operandSize);
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = (operandSize == OperandSize.Long ? 4 : 2) + 2 * count;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Rotate Memory Data.
-        private int RolRorMemRotate(ushort opcode, bool withExtend)
+        private M68KExecResult RolRorMemRotate(ushort opcode, bool withExtend)
         {
             bool isShiftLeft = ((opcode >> 8) & 0x1) == 1;
             var operandSize = OperandSize.Word;
@@ -198,7 +218,13 @@
 
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         private uint GetRotateResult(ulong valueForRotate, int count, bool isRotateLeft, OperandSize operandSize)
@@ -266,7 +292,7 @@
         }
 
         // Swap Register Halves.
-        private int Swap(ushort opcode)
+        private M68KExecResult Swap(ushort opcode)
         {
             var dataRegIdx = (uint)(opcode & 0x7);
             var dataReg = _memHelper.Read(dataRegIdx, StoreLocation.DataRegister, OperandSize.Long);
@@ -282,7 +308,13 @@
             _flagsHelper.AlterZ(result, OperandSize.Long);
             _regs.V = _regs.C = false;
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = 0;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
     }
 }

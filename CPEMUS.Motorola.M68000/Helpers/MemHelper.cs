@@ -6,6 +6,9 @@ namespace CPEMUS.Motorola.M68000.Helpers
     internal class MemHelper
     {
         private const int SP_ADDRESS = 7;
+        private const int READ_WRITE_CYCLE_PERIODS = 4;
+
+        public int ReadWriteCycles { get; private set; }
 
         private readonly IList<byte> _mem;
         private readonly M68KRegs _regs;
@@ -13,6 +16,16 @@ namespace CPEMUS.Motorola.M68000.Helpers
         {
             _mem = mem;
             _regs = regs;
+        }
+
+        public void ClearCycleCount()
+        {
+            ReadWriteCycles = 0;
+        }
+
+        public void UpdateCycleCount(OperandSize operandSize)
+        {
+            ReadWriteCycles += READ_WRITE_CYCLE_PERIODS * (operandSize == OperandSize.Long ? 2 : 1);
         }
 
         public void Write(uint value, uint address, StoreLocation location, OperandSize operandSize)
@@ -31,6 +44,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
                     Write(ref _regs.A[address], value, operandSize);
                     break;
                 case StoreLocation.Memory:
+                    UpdateCycleCount(operandSize);
                     _mem.Write(TruncateAddress(address, operandSize), value, operandSize);
                     break;
                 case StoreLocation.StatusRegister:
@@ -43,7 +57,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
             }
         }
 
-        public void Write(ref uint dest, uint value, OperandSize operandSize)
+        private void Write(ref uint dest, uint value, OperandSize operandSize)
         {
             dest = MergeDestWithValue(dest, value, operandSize);
         }
@@ -59,7 +73,7 @@ namespace CPEMUS.Motorola.M68000.Helpers
             };
         }
 
-        public uint Read(uint value, OperandSize operandSize)
+        private uint Read(uint value, OperandSize operandSize)
         {
             return operandSize switch
             {
@@ -82,6 +96,11 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 StoreLocation.ImmediateData => ReadImmediate(TruncateAddress(address, operandSize), operandSize),
                 _ => throw new IllegalInstructionException(),
             };
+
+            if (location == StoreLocation.Memory || location == StoreLocation.ImmediateData)
+            {
+                UpdateCycleCount(operandSize);
+            }
 
             if (signExtended)
             {
@@ -116,14 +135,14 @@ namespace CPEMUS.Motorola.M68000.Helpers
 
         public void PushStack(uint value, OperandSize operandSize)
         {
-            _regs.SP -= Math.Max((uint)operandSize, (uint)OperandSize.Word);
+            _regs.DecreaseSP(operandSize);
             Write(value, _regs.SP, StoreLocation.Memory, operandSize);
         }
 
         public uint PopStack(OperandSize operandSize)
         {
             var result = Read(_regs.SP, StoreLocation.Memory, operandSize);
-            _regs.SP += Math.Max((uint)operandSize, (uint)OperandSize.Word);
+            _regs.IncreaseSP(operandSize);
             return result;
         }
 

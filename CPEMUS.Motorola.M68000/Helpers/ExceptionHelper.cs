@@ -6,6 +6,20 @@ namespace CPEMUS.Motorola.M68000.Helpers
     {
         private const int AUTOVECTOR_NUMBER_OFFSET = 24;
         private const int MAX_PRIORITY_LEVEL = 7;
+        private const int EXCEPTION_DEFAULT_CLOCK_PERIODS = 24;
+
+        private Dictionary<ExceptionVectorType, int> _exceptionClockPeriods = new()
+        {
+            { ExceptionVectorType.Reset, 36 },
+            { ExceptionVectorType.AddressError, 46 },
+            { ExceptionVectorType.IllegalInstruction, 30 },
+            { ExceptionVectorType.IntegerDivideByZero, 34 },
+            { ExceptionVectorType.Chk, 36 },
+            { ExceptionVectorType.TrapV, 30 },
+            { ExceptionVectorType.PrivilegeViolation, 30 },
+            { ExceptionVectorType.Trace, 30 },
+            { ExceptionVectorType.Trap, 30 },
+        };
 
         private readonly PriorityQueue<int?, int> _pendingInterrupts = new(Comparer<int>.Create((x, y) => y.CompareTo(x)));
         private readonly M68KRegs _regs;
@@ -25,8 +39,9 @@ namespace CPEMUS.Motorola.M68000.Helpers
             }
         }
 
-        public bool TryProcessInterrupt()
+        public bool TryProcessInterrupt(out int clockPeriods)
         {
+            clockPeriods = default;
             if (_pendingInterrupts.TryDequeue(out int? vectorNumber, out int priority))
             {
                 if (priority < _regs.InterruptPriorityLevel)
@@ -36,13 +51,13 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 }
 
                 uint vectorAddress = (uint)((vectorNumber ?? priority + AUTOVECTOR_NUMBER_OFFSET) * 4);
-                ProcessException(vectorAddress, newPriorityLevel: priority);
+                clockPeriods = ProcessException(vectorAddress, newPriorityLevel: priority);
                 return true;
             }
             return false;
         }
 
-        public void ProcessReset()
+        public int ProcessReset()
         {
             _regs.SR = default;
             EnterSupervisorMode();
@@ -51,9 +66,11 @@ namespace CPEMUS.Motorola.M68000.Helpers
 
             _regs.SP = _memHelper.Read(0x0, StoreLocation.Memory, OperandSize.Long);
             _regs.PC = _memHelper.Read(0x4, StoreLocation.Memory, OperandSize.Long);
+
+            return _exceptionClockPeriods[ExceptionVectorType.Reset];
         }
 
-        public void Raise(uint vectorNumber, uint? newPc = null)
+        public int Raise(uint vectorNumber, uint? newPc = null)
         {
             ExceptionVectorType exceptionType = vectorNumber switch
             {
@@ -61,12 +78,12 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 >= 32 and <= 47 => ExceptionVectorType.Trap,
                 _ => throw new InvalidOperationException("Vector number is unknown or ignored"),
             };
-            var vectorAddress = vectorNumber * (int)OperandSize.Long;
 
-            ProcessException(vectorAddress, newPc);
+            var vectorAddress = vectorNumber * (int)OperandSize.Long;
+            return ProcessException(vectorAddress, newPc);
         }
 
-        public void Raise(M68KException exception)
+        public int Raise(M68KException exception)
         {
             uint? newPc = exception.ExceptionVectorType switch
             {
@@ -75,12 +92,18 @@ namespace CPEMUS.Motorola.M68000.Helpers
                 ExceptionVectorType.IllegalInstruction => _regs.PC + 2,
                 _ => null,
             };
-            var vectorAddress = (uint)exception.ExceptionVectorType * (int)OperandSize.Long;
 
-            ProcessException(vectorAddress, newPc);
+            int internalClockPeriods = 0;
+            if (exception is IntegerDivideByZeroException divException)
+            {
+                internalClockPeriods = divException.InstructionClockPeriods;
+            }
+
+            var vectorAddress = (uint)exception.ExceptionVectorType * (int)OperandSize.Long;
+            return ProcessException(vectorAddress, newPc) + internalClockPeriods;
         }
 
-        private void ProcessException(uint vectorAddress, uint? newPc = null, int? newPriorityLevel = null)
+        private int ProcessException(uint vectorAddress, uint? newPc = null, int? newPriorityLevel = null)
         {
             var prevStatusRegister = _regs.SR;
             EnterSupervisorMode();
@@ -92,8 +115,13 @@ namespace CPEMUS.Motorola.M68000.Helpers
 
             _memHelper.PushStack(newPc ?? _regs.PC, OperandSize.Long);
             _memHelper.PushStack(prevStatusRegister, OperandSize.Word);
-
             _regs.PC = _memHelper.Read(vectorAddress, StoreLocation.Memory, OperandSize.Long);
+
+            if (!_exceptionClockPeriods.TryGetValue((ExceptionVectorType)(vectorAddress / 4), out int clockPeriods))
+            {
+                clockPeriods = EXCEPTION_DEFAULT_CLOCK_PERIODS;
+            }
+            return clockPeriods;
         }
 
         private void EnterSupervisorMode()
@@ -122,7 +150,6 @@ namespace CPEMUS.Motorola.M68000.Helpers
     internal enum ExceptionVectorType
     {
         Reset = 0,
-        AccessFault = 2,
         AddressError = 3,
         IllegalInstruction = 4,
         IntegerDivideByZero = 5,
@@ -130,9 +157,6 @@ namespace CPEMUS.Motorola.M68000.Helpers
         TrapV = 7,
         PrivilegeViolation = 8,
         Trace = 9,
-        FormatError = 14,
-        UninitializedInterrupt = 15,
-        SpuriousInterrupt = 24,
         Trap = 32,
     }
 }

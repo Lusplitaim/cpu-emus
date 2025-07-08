@@ -2,13 +2,13 @@
 {
     public partial class M68K
     {
-        private int Nbcd(ushort opcode)
+        private M68KExecResult Nbcd(ushort opcode)
         {
             throw new NotImplementedException();
         }
 
         // Subtract Decimal with Extend.
-        private int Sbcd(ushort opcode)
+        private M68KExecResult Sbcd(ushort opcode)
         {
             throw new NotImplementedException();
         }

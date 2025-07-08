@@ -1,9 +1,11 @@
-﻿namespace CPEMUS.Motorola.M68000
+﻿using CPEMUS.Motorola.M68000.EA;
+
+namespace CPEMUS.Motorola.M68000
 {
     public partial class M68K
     {
         // Exclusive-OR Logical.
-        private int Eor(ushort opcode)
+        private M68KExecResult Eor(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -21,11 +23,21 @@
 
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect && operandSize == OperandSize.Long)
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Exclusive-OR Immediate.
-        private int Eori(ushort opcode)
+        private M68KExecResult Eori(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -43,11 +55,21 @@
 
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect && operandSize == OperandSize.Long)
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Exclusive-OR Immediate to CCR.
-        private int EoriToCcr(ushort opcode)
+        private M68KExecResult EoriToCcr(ushort opcode)
         {
             uint src = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Byte);
             var ccr = _regs.CCR;
@@ -56,11 +78,17 @@
 
             _regs.CCR = result;
 
-            return INSTR_DEFAULT_SIZE + 2;
+            int clockPeriods = 8;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE + 2,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Logical Complement.
-        private int Not(ushort opcode)
+        private M68KExecResult Not(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var eaProps = _eaHelper.Get(opcode, operandSize);
@@ -72,11 +100,21 @@
             _flagsHelper.AlterZ(result, operandSize);
             _regs.V = _regs.C = false;
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (operandSize == OperandSize.Long && (eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.AddressDirect))
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Inclusive-OR Logical.
-        private int Or(ushort opcode)
+        private M68KExecResult Or(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var eaProps = _eaHelper.Get(opcode, operandSize);
@@ -85,10 +123,16 @@
 
             var result = eaProps.Operand | dataReg;
 
+            int clockPeriods = eaProps.ClockPeriods;
+
             var writeToDataReg = ((opcode >> 8) & 0x1) == 0;
             if (writeToDataReg)
             {
                 _memHelper.Write(result, dataRegIdx, StoreLocation.DataRegister, operandSize);
+                if (operandSize == OperandSize.Long)
+                {
+                    clockPeriods += eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.ImmediateData ? 4 : 2;
+                }
             }
             else
             {
@@ -99,11 +143,15 @@
             _flagsHelper.AlterZ(result, operandSize);
             _regs.V = _regs.C = false;
 
-            return eaProps.InstructionSize;
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Inclusive-OR.
-        private int Ori(ushort opcode)
+        private M68KExecResult Ori(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var opcodeSize = Math.Max((int)operandSize, (int)OperandSize.Word) + INSTR_DEFAULT_SIZE;
@@ -118,11 +166,21 @@
             _flagsHelper.AlterZ(result, operandSize);
             _regs.V = _regs.C = false;
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect && operandSize == OperandSize.Long)
+            {
+                clockPeriods += 4;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Inclusive-OR Immediate to CCR.
-        private int OriToCcr(ushort opcode)
+        private M68KExecResult OriToCcr(ushort opcode)
         {
             var immediateData = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Byte);
 
@@ -130,11 +188,17 @@
 
             _regs.CCR = (byte)result;
 
-            return INSTR_DEFAULT_SIZE + 2;
+            int clockPeriods = 8;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE + 2,
+                ClockPeriods = clockPeriods
+            };
         }
 
 
-        private int And(ushort opcode)
+        private M68KExecResult And(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
 
@@ -152,21 +216,33 @@
             _regs.V = false;
             _regs.C = false;
 
+            int clockPeriods = 0;
+
             // Storing.
             int storeDirection = (opcode >> 8) & 0x1;
             if ((StoreDirection)storeDirection == StoreDirection.Source)
             {
                 _memHelper.Write(result, srcIdx, StoreLocation.DataRegister, operandSize);
+                if (operandSize == OperandSize.Long)
+                {
+                    clockPeriods += eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.ImmediateData ? 4 : 2;
+                }
             }
             else
             {
                 _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
             }
 
-            return eaProps.InstructionSize;
+            clockPeriods += eaProps.ClockPeriods;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
-        private int Andi(ushort opcode)
+        private M68KExecResult Andi(ushort opcode)
         {
             var operandSize = (OperandSize)Math.Pow(2, (opcode >> 6) & 0x3);
             var immediateDataSize = operandSize == OperandSize.Long
@@ -190,7 +266,17 @@
             // Storing.
             _memHelper.Write(result, eaProps.Address, eaProps.Location, operandSize);
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods;
+            if (eaProps.Mode == EAMode.DataDirect && operandSize == OperandSize.Long)
+            {
+                clockPeriods += 2;
+            }
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
     }
 }

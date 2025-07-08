@@ -1,5 +1,4 @@
 ﻿using CPEMUS.Motorola.M68000.Exceptions;
-using CPEMUS.Motorola.M68000.Extensions;
 using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000.EA
@@ -7,22 +6,21 @@ namespace CPEMUS.Motorola.M68000.EA
     internal class EAHelper
     {
         private const int DEFAULT_OPCODE_SIZE = 2;
-        private const int READ_CLOCK_PERIODS = 4;
 
-        private readonly Dictionary<EAMode, (int ReadCyclesShort, int ReadCyclesLong, int AdditionalClockPeriods)> _clockPeriods = new()
+        private readonly Dictionary<EAMode, int> _additionalClockPeriods = new()
         {
-            { EAMode.DataDirect, (0, 0, 0) },
-            { EAMode.AddressDirect, (0, 0, 0) },
-            { EAMode.AddressIndirect, (1, 2, 0) },
-            { EAMode.PostincIndirect, (1, 2, 0) },
-            { EAMode.PredecIndirect, (1, 2, 2) },
-            { EAMode.BaseDisplacement, (2, 3, 0) },
-            { EAMode.IndexedAddressing, (2, 3, 2) },
-            { EAMode.AbsoluteShort, (2, 3, 0) },
-            { EAMode.AbsoluteLong, (3, 4, 0) },
-            { EAMode.PCDisplacement8, (2, 3, 0) },
-            { EAMode.PCDisplacement16, (2, 3, 2) },
-            { EAMode.ImmediateData, (1, 2, 0) },
+            { EAMode.DataDirect, 0 },
+            { EAMode.AddressDirect, 0 },
+            { EAMode.AddressIndirect, 0 },
+            { EAMode.PostincIndirect, 0 },
+            { EAMode.PredecIndirect, 2 },
+            { EAMode.BaseDisplacement16, 0 },
+            { EAMode.IndexedAddressing, 2 },
+            { EAMode.AbsoluteShort, 0 },
+            { EAMode.AbsoluteLong, 0 },
+            { EAMode.PCDisplacement8, 2 },
+            { EAMode.PCDisplacement16, 0 },
+            { EAMode.ImmediateData, 0 },
         };
 
         private readonly M68KRegs _regs;
@@ -46,12 +44,11 @@ namespace CPEMUS.Motorola.M68000.EA
         {
             EAProps result = GetProps(opcode, operandSize, opcodeSize);
 
-            (int readCyclesShort, int readCyclesLong, int additionalClockPeriods) = _clockPeriods[result.Mode];
+            int additionalClockPeriods = _additionalClockPeriods[result.Mode];
             result.ClockPeriods += additionalClockPeriods;
             if (loadOperand)
             {
                 result.Operand = _memHelper.Read(result.Address, result.Location, operandSize, signExtended);
-                result.ClockPeriods += (operandSize == OperandSize.Long ? readCyclesLong : readCyclesShort) * READ_CLOCK_PERIODS;
             }
             result.InstructionSize += opcodeSize;
 
@@ -86,7 +83,7 @@ namespace CPEMUS.Motorola.M68000.EA
                 case EAMode.PredecIndirect: // EA = [--An].
                     result = GetAnIndirectPredecVal(registerField, operandSize);
                     break;
-                case EAMode.BaseDisplacement: // EA = [An + displacement16].
+                case EAMode.BaseDisplacement16: // EA = [An + displacement16].
                     result = GetAnIndirectDisplaceVal(registerField, opcodeSize);
                     break;
                 case EAMode.IndexedAddressing: // EA = [An + displacement8 + Xn.size * scale].
@@ -192,7 +189,7 @@ namespace CPEMUS.Motorola.M68000.EA
         private EAProps GetAnIndirectDisplaceVal(uint idx, int opcodeSize)
         {
             var an = ReadAddressReg(idx);
-            int displacement = (short)_mem.ReadWord((uint)(_regs.PC + opcodeSize));
+            int displacement = (short)_memHelper.Read((uint)(_regs.PC + opcodeSize), StoreLocation.Memory, OperandSize.Word);
             uint address = (uint)(an + displacement);
             return new()
             {
@@ -204,7 +201,7 @@ namespace CPEMUS.Motorola.M68000.EA
 
         private EAProps GetIndexedAddressingVal(uint an, int opcodeSize)
         {
-            var extWord = (ushort)_mem.ReadWord((uint)(_regs.PC + opcodeSize));
+            var extWord = (ushort)_memHelper.Read((uint)(_regs.PC + opcodeSize), StoreLocation.Memory, OperandSize.Word);
             int displacement = (sbyte)extWord;
 
             int indexRegisterIdx = (extWord >> 12) & 0x7;
@@ -238,7 +235,7 @@ namespace CPEMUS.Motorola.M68000.EA
         private EAProps GetPCDisplaceVal(int opcodeSize)
         {
             var pc = _regs.PC;
-            int displacement = (short)_mem.ReadWord((uint)(pc + opcodeSize));
+            int displacement = (short)_memHelper.Read((uint)(pc + opcodeSize), StoreLocation.Memory, OperandSize.Word);
             uint address = (uint)(pc + opcodeSize + displacement);
             return new()
             {
@@ -254,11 +251,11 @@ namespace CPEMUS.Motorola.M68000.EA
             int displacement;
             if (word)
             {
-                displacement = (short)_mem.ReadWord((uint)(pc + opcodeSize));
+                displacement = (short)_memHelper.Read((uint)(pc + opcodeSize), StoreLocation.Memory, OperandSize.Word);
             }
             else
             {
-                displacement = (int)_mem.ReadLong((uint)(pc + opcodeSize));
+                displacement = (int)_memHelper.Read((uint)(pc + opcodeSize), StoreLocation.Memory, OperandSize.Long);
             }
 
             uint address = (uint)displacement;

@@ -1,4 +1,5 @@
-﻿using CPEMUS.Motorola.M68000.Exceptions;
+﻿using CPEMUS.Motorola.M68000.EA;
+using CPEMUS.Motorola.M68000.Exceptions;
 using CPEMUS.Motorola.M68000.Helpers;
 
 namespace CPEMUS.Motorola.M68000
@@ -6,38 +7,51 @@ namespace CPEMUS.Motorola.M68000
     public partial class M68K
     {
         // Check Register Against Bounds.
-        private int Chk(ushort opcode)
+        private M68KExecResult Chk(ushort opcode)
         {
             throw new NotImplementedException();
         }
 
         // Take Illegal Instruction Trap.
-        private int Illegal(ushort opcode)
+        private M68KExecResult Illegal(ushort opcode)
         {
             throw new NotImplementedException();
         }
 
         // Trap.
-        private int Trap(ushort opcode)
+        private M68KExecResult Trap(ushort opcode)
         {
             var vectorNumber = (opcode & 0xF) + 32;
-            _exceptionHelper.Raise((uint)vectorNumber, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
-            return 0;
+            int clockPeriods = _exceptionHelper.Raise((uint)vectorNumber, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
+            return new()
+            {
+                InstructionSize = 0,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Trap on Overflow.
-        private int TrapV(ushort opcode)
+        private M68KExecResult TrapV(ushort opcode)
         {
+            int clockPeriods = 0;
             if (_regs.V)
             {
-                _exceptionHelper.Raise((uint)ExceptionVectorType.TrapV, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
-                return 0;
+                clockPeriods = _exceptionHelper.Raise((uint)ExceptionVectorType.TrapV, newPc: _regs.PC + INSTR_DEFAULT_SIZE);
+                return new()
+                {
+                    InstructionSize = clockPeriods,
+                    ClockPeriods = clockPeriods
+                };
             }
-            return INSTR_DEFAULT_SIZE;
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // AND Immediate to the Status Register.
-        private int AndiToSr(ushort opcode)
+        private M68KExecResult AndiToSr(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -48,11 +62,17 @@ namespace CPEMUS.Motorola.M68000
 
             _regs.SR = (ushort)(_regs.SR & operand);
 
-            return 4;
+            int clockPeriods = 8;
+
+            return new()
+            {
+                InstructionSize = 4,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // AND Immediate to the Condition Code Register.
-        private int AndiToCcr(ushort opcode)
+        private M68KExecResult AndiToCcr(ushort opcode)
         {
             uint src = _memHelper.Read(_regs.PC + INSTR_DEFAULT_SIZE, StoreLocation.ImmediateData, OperandSize.Byte);
             var ccr = _regs.CCR;
@@ -62,11 +82,17 @@ namespace CPEMUS.Motorola.M68000
             // Storing.
             _regs.CCR = result;
 
-            return 4;
+            int clockPeriods = 8;
+
+            return new()
+            {
+                InstructionSize = 4,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Exclusive-OR Immediate to the Status Register.
-        private int EoriToSr(ushort opcode)
+        private M68KExecResult EoriToSr(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -77,22 +103,35 @@ namespace CPEMUS.Motorola.M68000
 
             _regs.SR = (ushort)(_regs.SR ^ operand);
 
-            return 4;
+            int clockPeriods = 8;
+
+            return new()
+            {
+                InstructionSize = 4,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Move from the Status Register.
         // This instruction is not privileged in MC68000.
-        private int MoveFromSr(ushort opcode)
+        private M68KExecResult MoveFromSr(ushort opcode)
         {
             var eaProps = _eaHelper.Get(opcode, OperandSize.Word);
 
             _memHelper.Write(_regs.SR, eaProps.Address, eaProps.Location, OperandSize.Word);
 
-            return eaProps.InstructionSize;
+            var regMode = eaProps.Mode == EAMode.DataDirect || eaProps.Mode == EAMode.AddressDirect;
+            int clockPeriods = eaProps.ClockPeriods + (regMode ? 2 : 0);
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Move to the Status Register.
-        private int MoveToSr(ushort opcode)
+        private M68KExecResult MoveToSr(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -103,11 +142,17 @@ namespace CPEMUS.Motorola.M68000
 
             _regs.SR = (ushort)eaProps.Operand;
 
-            return eaProps.InstructionSize;
+            int clockPeriods = eaProps.ClockPeriods + 4;
+
+            return new()
+            {
+                InstructionSize = eaProps.InstructionSize,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Move User Stack Pointer.
-        private int MoveUsp(ushort opcode)
+        private M68KExecResult MoveUsp(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -127,11 +172,17 @@ namespace CPEMUS.Motorola.M68000
                 _memHelper.Write(_regs.USP, addrRegIdx, StoreLocation.AddressRegister, OperandSize.Long);
             }
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = 0;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Inclusive-OR Immediate to the Status Register.
-        private int OriToSr(ushort opcode)
+        private M68KExecResult OriToSr(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -142,22 +193,36 @@ namespace CPEMUS.Motorola.M68000
 
             _regs.SR = (ushort)(_regs.SR | operand);
 
-            return 4;
+            int clockPeriods = 8;
+
+            return new()
+            {
+                InstructionSize = 4,
+                ClockPeriods = clockPeriods
+            };
         }
 
         // Reset External Devices.
-        private int Reset(ushort opcode)
+        private M68KExecResult Reset(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
                 throw new PrivilegeViolationException();
             }
 
-            return INSTR_DEFAULT_SIZE;
+            int clockPeriods = 132;
+            bool isTotalPeriods = true;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE,
+                ClockPeriods = clockPeriods,
+                IsTotalCycleCount = isTotalPeriods,
+            };
         }
 
         // Return from Exception.
-        private int Rte(ushort opcode)
+        private M68KExecResult Rte(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -166,11 +231,19 @@ namespace CPEMUS.Motorola.M68000
 
             _exceptionHelper.Return();
 
-            return 0;
+            int clockPeriods = 20;
+            bool isTotalPeriods = true;
+
+            return new()
+            {
+                InstructionSize = 0,
+                ClockPeriods = clockPeriods,
+                IsTotalCycleCount = isTotalPeriods,
+            };
         }
 
         // Load Status Register and Stop.
-        private int Stop(ushort opcode)
+        private M68KExecResult Stop(ushort opcode)
         {
             if (!IsInSupervisorMode())
             {
@@ -182,7 +255,13 @@ namespace CPEMUS.Motorola.M68000
 
             Status = M68KStatus.Stopped;
 
-            return 4;
+            int clockPeriods = 4;
+
+            return new()
+            {
+                InstructionSize = INSTR_DEFAULT_SIZE + 2,
+                ClockPeriods = clockPeriods,
+            };
         }
 
         private bool IsInSupervisorMode()
